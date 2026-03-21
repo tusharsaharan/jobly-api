@@ -1,0 +1,229 @@
+const http = require("http");
+const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
+const { createAdapter } = require("@socket.io/redis-adapter");
+const logger = require("../../config/logger");
+const { getRedisClient } = require("../../config/redis");
+const User = require("../../models/User");
+
+let io = null;
+
+function setupSocketIO(server) {
+  io = new Server(server, {
+    cors: {
+      origin: process.env.CLIENT_ORIGIN || "*",
+      methods: ["GET", "POST"],
+      credentials: true,
+    },
+    pingTimeout: 30000,
+    pingInterval: 25000,
+  });
+
+  // Attach Redis adapter for horizontal scaling across multi-node instances if Redis is connected
+  try {
+    const pubClient = getRedisClient();
+    if (pubClient && pubClient.status === "ready") {
+      const subClient = pubClient.duplicate();
+      io.adapter(createAdapter(pubClient, subClient));
+      logger.info("⚡ Socket.IO configured with Redis Streams cluster adapter");
+    }
+  } catch (err) {
+    logger.debug({ err: err.message }, "Socket.IO using in-memory pubsub adapter");
+  }
+
+  // Socket Authentication Middleware
+  io.use(async (socket, next) => {
+    const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(" ")[1];
+    if (!token) {
+      return next(new Error("Authentication token required for real-time messaging"));
+    }
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || "development_secret_key_12345678");
+      const user = await User.findById(decoded.id).select("-password -resumeText").lean();
+      if (!user) {
+        return next(new Error("User account not found"));
+      }
+      socket.user = user;
+      next();
+    } catch (err) {
+      return next(new Error("Invalid authentication token"));
+    }
+  });
+
+  io.on("connection", (socket) => {
+    const userId = String(socket.user._id);
+    logger.info({ userId, socketId: socket.id }, "Real-time client connected via WebSocket");
+
+    // Join personal user room for private notifications
+    socket.join(`user:${userId}`);
+
+    // Join application room for live chat
+    socket.on("join_conversation", (applicationId) => {
+      socket.join(`app:${applicationId}`);
+      logger.debug({ userId, applicationId }, "Joined conversation room");
+    });
+
+    socket.on("leave_conversation", (applicationId) => {
+      socket.leave(`app:${applicationId}`);
+      logger.debug({ userId, applicationId }, "Left conversation room");
+    });
+
+    // Real-time typing indicators
+    socket.on("typing_start", ({ applicationId }) => {
+      socket.to(`app:${applicationId}`).emit("user_typing", {
+        applicationId,
+        userId,
+        name: socket.user.name,
+      });
+    });
+
+    socket.on("typing_stop", ({ applicationId }) => {
+      socket.to(`app:${applicationId}`).emit("user_stop_typing", {
+        applicationId,
+        userId,
+      });
+    });
+
+    // ==========================================
+    // Real-Time Technical Interview Room Handlers
+    // ==========================================
+    socket.on("join_interview", ({ roomKey }) => {
+      const roomChannel = `interview:${roomKey}`;
+      socket.join(roomChannel);
+      logger.info({ userId, roomKey }, "Joined real-time technical interview room");
+
+      // Broadcast presence to room members
+      socket.to(roomChannel).emit("participant_joined", {
+        userId,
+        name: socket.user.name,
+        role: socket.user.role,
+        joinedAt: new Date().toISOString(),
+      });
+    });
+
+    socket.on("leave_interview", ({ roomKey }) => {
+      const roomChannel = `interview:${roomKey}`;
+      socket.leave(roomChannel);
+      socket.to(roomChannel).emit("participant_left", {
+        userId,
+        leftAt: new Date().toISOString(),
+      });
+      logger.info({ userId, roomKey }, "Left technical interview room");
+    });
+
+    // Ephemeral Live Code Cursor / Selection Presence
+    socket.on("editor_cursor_move", ({ roomKey, cursor, file }) => {
+      socket.to(`interview:${roomKey}`).emit("peer_cursor_update", {
+        userId,
+        name: socket.user.name,
+        cursor, // { lineNumber, column }
+        file,
+      });
+    });
+
+    // Ephemeral Whiteboard Cursor Presence
+    socket.on("whiteboard_cursor_move", ({ roomKey, point }) => {
+      socket.to(`interview:${roomKey}`).emit("peer_whiteboard_cursor", {
+        userId,
+        name: socket.user.name,
+        point, // { x, y }
+      });
+    });
+
+    // Whiteboard Incremental Delta Synchronization
+    socket.on("whiteboard_delta", ({ roomKey, delta, snapshotVersion }) => {
+      socket.to(`interview:${roomKey}`).emit("whiteboard_delta_broadcast", {
+        senderId: userId,
+        delta,
+        snapshotVersion,
+      });
+    });
+
+    // Real-Time Live Transcript Broadcast
+    socket.on("transcript_chunk", async ({ roomKey, text, isFinal, offsetMs }) => {
+      socket.to(`interview:${roomKey}`).emit("live_transcript_received", {
+        senderId: userId,
+        speakerName: socket.user.name,
+        role: socket.user.role,
+        text,
+        isFinal,
+        offsetMs,
+        timestamp: Date.now(),
+      });
+
+      // Persist final chunks into TimelineEvents
+      if (isFinal && text) {
+        try {
+          const InterviewSession = require("../../models/InterviewSession");
+          const session = await InterviewSession.findOne({ roomKey });
+          if (session) {
+            const transcriptionService = require("../../services/transcriptionService");
+            await transcriptionService.recordTranscriptSegment({
+              sessionId: session._id,
+              participantId: userId,
+              participantRole: socket.user.role || "seeker",
+              text,
+              isFinal: true,
+              offsetMs,
+            });
+          }
+        } catch (err) {
+          logger.debug({ err: err.message }, "Error recording transcript chunk");
+        }
+      }
+    });
+
+    // Real-Time Interactive Terminal Streaming
+    socket.on("terminal_input", ({ terminalId, data }) => {
+      try {
+        const terminalService = require("../terminal/terminalService");
+        Promise.resolve(terminalService.writeToTerminal(terminalId, data)).catch((err) => {
+          logger.debug({ err: err.message, terminalId }, "Terminal input error");
+        });
+      } catch (err) {
+        logger.debug({ err: err.message, terminalId }, "Terminal input error");
+      }
+    });
+
+    socket.on("terminal_resize", ({ terminalId, cols, rows }) => {
+      try {
+        const terminalService = require("../terminal/terminalService");
+        Promise.resolve(terminalService.resizeTerminal(terminalId, cols, rows)).catch((err) => {
+          logger.debug({ err: err.message, terminalId }, "Terminal resize error");
+        });
+      } catch (err) {
+        logger.debug({ err: err.message, terminalId }, "Terminal resize error");
+      }
+    });
+
+    socket.on("disconnect", () => {
+      logger.info({ userId, socketId: socket.id }, "Client disconnected from WebSocket");
+    });
+  });
+
+  return io;
+}
+
+function getSocketIO() {
+  return io;
+}
+
+function emitToUser(userId, event, payload) {
+  if (io) {
+    io.to(`user:${String(userId)}`).emit(event, payload);
+  }
+}
+
+function emitToConversation(applicationId, event, payload) {
+  if (io) {
+    io.to(`app:${String(applicationId)}`).emit(event, payload);
+  }
+}
+
+module.exports = {
+  setupSocketIO,
+  getSocketIO,
+  emitToUser,
+  emitToConversation,
+};
