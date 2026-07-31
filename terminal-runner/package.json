@@ -1,0 +1,8 @@
+{
+  "name": "jobly-terminal-runner",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  }
+}

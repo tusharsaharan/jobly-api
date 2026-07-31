@@ -1,0 +1,10 @@
+0000000000000000000000000000000000000000 84bf097d7db4aa997ccbfb86c858f4f93a3e65ae Tushar Saharan <tusharsaharan18@gmail.com> 1782278403 +0530	clone: from https://github.com/tusharsaharan/job-recommender-api.git
+84bf097d7db4aa997ccbfb86c858f4f93a3e65ae 7b464adc797e2dab4e4b631d62935bec2cfad351 Tushar Saharan <tusharsaharan18@gmail.com> 1782288547 +0530	commit: Final integration and backend polish for deployment
+7b464adc797e2dab4e4b631d62935bec2cfad351 11948718e0bf2f80e3a0679eb3be2f2128869e61 Tushar Saharan <tusharsaharan18@gmail.com> 1782311161 +0530	commit: Add strict ATS criteria and error handling
+11948718e0bf2f80e3a0679eb3be2f2128869e61 abc7bd6afa9e806d9515399addf57a546142a199 Tushar Saharan <tusharsaharan18@gmail.com> 1782322859 +0530	commit: feat: complete rewrite, fix 30+ critical bugs, optimize AI integration, harden security
+abc7bd6afa9e806d9515399addf57a546142a199 03c9df4e8482141b63c95ec7d7b735a4bccc8b72 Tushar Saharan <tusharsaharan18@gmail.com> 1784164106 +0530	commit: Update backend API: job recommendation logic, messaging, and resume controllers
+03c9df4e8482141b63c95ec7d7b735a4bccc8b72 dd1fd42ba30a91a8acdadf41b92846d3f42c35db Tushar Saharan <tusharsaharan18@gmail.com> 1784230768 +0530	commit: feat: implement backend tests and validation updates
+dd1fd42ba30a91a8acdadf41b92846d3f42c35db 210cb6099c638027517965559a7024f81004946e Tushar Saharan <tusharsaharan18@gmail.com> 1784652523 +0530	commit: docs: update README layout and remove hello.txt
+210cb6099c638027517965559a7024f81004946e dc2bd6dbe0570d9e73bb7cdce1aec89f2bd1563c Tushar Saharan <tusharsaharan18@gmail.com> 1784652571 +0530	reset: moving to clean-main
+dc2bd6dbe0570d9e73bb7cdce1aec89f2bd1563c f1743c78fdccf970b0bd2d0f9612792bff214e60 Tushar Saharan <tusharsaharan18@gmail.com> 1784653518 +0530	commit: docs: redesign README with capsule-render, typing SVG, architecture diagram, and modern layout
+f1743c78fdccf970b0bd2d0f9612792bff214e60 cc76b3b9cc6ab8ea731c4dae430fe4bb1e2be575 Tushar Saharan <tusharsaharan18@gmail.com> 1784654422 +0530	commit: docs: enhance README with rainbow dividers, animated GIF, and DIMFLIX-style interactive elements
