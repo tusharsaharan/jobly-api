@@ -1,8 +1,12 @@
 const pdfParse = require("pdf-parse");
+const crypto = require("crypto");
 const User = require("../models/User");
 const Application = require("../models/Application");
+const ResumeUpload = require("../models/ResumeUpload");
+const AtsAnalysis = require("../models/AtsAnalysis");
 const aiService = require("../modules/ai/aiService");
 const { computeAtsScore } = require("../services/ai.service");
+const { scoreRoleFit, scoreResumeHealth, extractSkillsFromText, createEvidenceRef } = require("../modules/ats");
 const { normalizeSkills } = require("../utils/jobLogic");
 const logger = require("../config/logger");
 const sseManager = require("../infrastructure/events/sse.manager");
@@ -63,23 +67,35 @@ function normalizeExperience(value) {
 }
 
 async function processResumeJob(jobData) {
-  const { userId, fileBuffer, s3Key, originalName } = jobData;
+  const { userId, fileBuffer, s3Key, originalName, uploadId } = jobData;
   const startTime = Date.now();
-  logger.info({ userId, originalName }, "Starting async resume processing pipeline");
+  logger.info({ userId, originalName, uploadId }, "Starting async resume processing pipeline");
 
-  // Step 1: Notify client of progress
+  // Step 1: Notify client of scanning & text extraction
   sseManager.sendToUser(userId, "resume.status", {
-    step: "extracting_text",
-    message: "Extracting text from PDF document...",
-    progress: 25,
+    step: "scanning",
+    message: "Scanning and extracting text from PDF document...",
+    progress: 20,
   });
 
+  if (uploadId) {
+    await ResumeUpload.findOneAndUpdate(
+      { uploadId },
+      { state: "text_extracting", progress: 20, messageCode: "text_extracting" }
+    ).catch(() => {});
+  }
+
   let text = "";
+  let sha256 = "0".repeat(64);
   try {
     let buffer = fileBuffer ? Buffer.from(fileBuffer, "base64") : null;
     if (!buffer && s3Key) {
       const stream = await getFileStream(s3Key);
       buffer = await streamToBuffer(stream);
+    }
+
+    if (buffer) {
+      sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
     }
 
     if (originalName === "mock-resume.pdf") {
@@ -96,18 +112,121 @@ async function processResumeJob(jobData) {
     sseManager.sendToUser(userId, "resume.failed", {
       error: "Could not extract readable text from PDF. Ensure the file is not scanned/image-based.",
     });
+    if (uploadId) {
+      await ResumeUpload.findOneAndUpdate(
+        { uploadId },
+        { state: "failed", errorMessage: "Empty or unreadable text", progress: 100 }
+      ).catch(() => {});
+    }
     return { success: false, error: "Text extraction empty" };
   }
 
   // Step 2: AI Parsing & Structured Extraction
   sseManager.sendToUser(userId, "resume.status", {
-    step: "ai_parsing",
-    message: "AI extracting skills, education, and experience...",
-    progress: 50,
+    step: "profile_extracting",
+    message: "AI extracting canonical skills, experience, and evidence...",
+    progress: 45,
   });
+  if (uploadId) {
+    await ResumeUpload.findOneAndUpdate(
+      { uploadId },
+      { state: "profile_extracting", progress: 45, messageCode: "profile_extracting" }
+    ).catch(() => {});
+  }
 
   const parsed = await aiService.parseResume(text);
   const education = parsed && typeof parsed.education === "object" ? parsed.education : {};
+
+  // Extract canonical skills from text & AI output
+  const extractedSkills = extractSkillsFromText(text);
+  const skillEntries = extractedSkills.map((s) => ({
+    canonicalId: s.canonicalId,
+    label: s.label,
+    aliasesObserved: [s.matchedAlias],
+    evidence: [createEvidenceRef("skills", `${s.label} mentioned in resume`)],
+  }));
+
+  // Build canonical ResumeProfile
+  const resumeProfile = {
+    schemaVersion: "resume-profile/1",
+    source: {
+      uploadId: uploadId || `upl-${Date.now()}`,
+      fileName: originalName || "resume.pdf",
+      mimeType: "application/pdf",
+      sha256,
+      extractedAt: new Date().toISOString(),
+      extractor: "gemini",
+      extractionConfidence: 0.92,
+    },
+    contact: {
+      email: cleanText(parsed?.contact?.email || parsed?.email, 100) || null,
+      phone: cleanText(parsed?.contact?.phone || parsed?.phone, 50) || null,
+      location: cleanText(parsed?.contact?.location || parsed?.location, 100) || null,
+      links: [],
+    },
+    headline: cleanText(parsed?.headline || parsed?.title, 200) || null,
+    summary: cleanText(parsed?.summary, 2000) || null,
+    skills: skillEntries.length > 0 ? skillEntries : normalizeSkills(parsed?.skills).map((s) => ({
+      canonicalId: `skill_${s.toLowerCase().replace(/\W+/g, "_")}`,
+      label: s,
+      aliasesObserved: [s],
+      evidence: [createEvidenceRef("skills", s)],
+    })),
+    experience: normalizeExperience(parsed?.experience).map((e) => ({
+      title: e.title || "Software Engineer",
+      organization: e.company || "Company",
+      startDate: null,
+      endDate: null,
+      isCurrent: false,
+      location: null,
+      bullets: e.duration ? [e.duration] : [],
+      skills: [],
+      evidence: [createEvidenceRef("experience", `${e.title} at ${e.company}`)],
+    })),
+    projects: (Array.isArray(parsed?.projects) ? parsed.projects : []).map((p) => ({
+      name: typeof p === "string" ? p : (p.name || "Project"),
+      description: typeof p === "string" ? p : (p.description || null),
+      bullets: [],
+      links: [],
+      skills: [],
+      evidence: [createEvidenceRef("projects", typeof p === "string" ? p : p.name)],
+    })),
+    education: [
+      {
+        qualification: cleanText(education.degree, 160) || "Bachelor's Degree",
+        fieldOfStudy: null,
+        institution: cleanText(education.college, 160) || "University",
+        startDate: null,
+        endDate: null,
+        gpa: normalizeCgpa(education.cgpa),
+        gpaScale: 10,
+        evidence: [createEvidenceRef("education", `${education.degree} from ${education.college}`)],
+      },
+    ],
+    certifications: [],
+    achievements: normalizeTextList(parsed?.achievements, 20, 300).map((a) => ({
+      text: a,
+      quantifiedOutcome: null,
+      evidence: [createEvidenceRef("achievements", a)],
+    })),
+    sectionsDetected: ["contact", "summary", "skills", "experience", "education"],
+    parseWarnings: [],
+  };
+
+  // Step 3: Pre-application Resume Health Score
+  sseManager.sendToUser(userId, "resume.status", {
+    step: "health_analyzing",
+    message: "Analyzing resume health, structure, and impact...",
+    progress: 70,
+  });
+  if (uploadId) {
+    await ResumeUpload.findOneAndUpdate(
+      { uploadId },
+      { state: "health_analyzing", progress: 70, messageCode: "health_analyzing" }
+    ).catch(() => {});
+  }
+
+  const healthResult = scoreResumeHealth(resumeProfile);
 
   const updateData = {
     skills: normalizeSkills(parsed?.skills),
@@ -119,13 +238,15 @@ async function processResumeJob(jobData) {
     collegeTier: normalizeCollegeTier(education.tier),
     achievements: normalizeTextList(parsed?.achievements, 20, 300),
     experience: normalizeExperience(parsed?.experience),
+    resumeProfile,
+    resumeHealth: healthResult,
   };
 
-  // Step 3: Persist to MongoDB
+  // Step 4: Persist to MongoDB
   sseManager.sendToUser(userId, "resume.status", {
     step: "persisting",
-    message: "Saving candidate profile...",
-    progress: 75,
+    message: "Saving candidate profile & health analysis...",
+    progress: 85,
   });
 
   const user = await User.findByIdAndUpdate(userId, updateData, { new: true, runValidators: true });
@@ -133,36 +254,71 @@ async function processResumeJob(jobData) {
     return { success: false, error: "User not found" };
   }
 
-  // Step 4: Refresh ATS scores on existing applications in parallel
+  // Step 5: Refresh ATS V2 scores on existing applications in parallel
   const applications = await Application.find({ seeker: user._id }).populate("job");
-  const candidateProfile = {
-    skills: user.skills,
-    college: user.college,
-    collegeTier: user.collegeTier,
-    cgpa: user.cgpa,
-    achievements: user.achievements,
-    experience: user.experience,
-    degree: user.degree,
-  };
-
   await Promise.allSettled(
     applications.map(async (app) => {
       if (!app.job) return;
-      const score = await computeAtsScore(
-        user.resumeText,
-        app.job.description,
-        app.job.skills,
-        candidateProfile,
-        app.job.atsRequirements
-      );
-      app.atsScore = score.score;
-      app.atsBreakdown = score.breakdown;
-      app.atsTips = score.tips;
-      await app.save();
+      try {
+        const jobAtsProfile = {
+          schemaVersion: "job-ats-profile/1",
+          targetTitles: [app.job.title],
+          mustHaveSkills: (app.job.skills || []).map((s) => ({
+            canonicalId: `skill_${s.toLowerCase().replace(/\W+/g, "_")}`,
+            label: s,
+            required: true,
+            weight: 4,
+          })),
+          preferredSkills: [],
+          responsibilityPhrases: [],
+          minimumExperienceYears: app.job.experienceYears || 0,
+          requiredEducation: { degrees: [], fieldsOfStudy: [], required: false },
+          certifications: [],
+          keywords: [],
+        };
+
+        const analysis = scoreRoleFit({
+          resumeProfile,
+          jobAtsProfile,
+          jobId: app.job._id.toString(),
+          applicationId: app._id.toString(),
+          resumeUploadId: uploadId || "upload-legacy",
+          resumeHash: sha256,
+        });
+
+        const savedAnalysis = await AtsAnalysis.create({
+          ...analysis,
+          userId: user._id,
+          jobId: app.job._id,
+          applicationId: app._id,
+        });
+
+        app.atsScore = analysis.overallScore;
+        app.latestAtsAnalysis = savedAnalysis._id;
+        app.atsVersion = "v2";
+        await app.save();
+      } catch (err) {
+        logger.warn({ err: err.message, appId: app._id }, "Failed to score application with ATS V2");
+      }
     })
   );
 
-  // Step 5: Publish domain events & notify client
+  // Update ResumeUpload to completed
+  if (uploadId) {
+    await ResumeUpload.findOneAndUpdate(
+      { uploadId },
+      {
+        state: "completed",
+        progress: 100,
+        messageCode: "completed",
+        resumeProfile,
+        healthScore: healthResult.score,
+        healthAnalysis: healthResult,
+      }
+    ).catch(() => {});
+  }
+
+  // Step 6: Publish domain events & notify client
   const durationSec = (Date.now() - startTime) / 1000;
   resumeProcessingDurationSeconds.labels("success", "gemini").observe(durationSec);
 
@@ -174,21 +330,18 @@ async function processResumeJob(jobData) {
 
   sseManager.sendToUser(userId, "resume.completed", {
     step: "completed",
-    message: "Resume parsing and ATS scoring complete!",
+    message: "Resume parsing and health check complete!",
     progress: 100,
-    profile: {
-      skills: updateData.skills,
-      summary: updateData.resumeSummary,
-      education: { degree: updateData.degree, college: updateData.college, cgpa: updateData.cgpa, tier: updateData.collegeTier },
-      achievements: updateData.achievements,
-      experience: updateData.experience,
-    },
+    healthScore: healthResult.score,
+    healthAnalysis: healthResult,
+    profile: resumeProfile,
   });
 
-  logger.info({ userId, durationSec }, "Resume processing pipeline finished successfully");
-  return { success: true, user };
+  logger.info({ userId, durationSec, healthScore: healthResult.score }, "Resume processing pipeline finished successfully");
+  return { success: true, user, resumeProfile, healthResult };
 }
 
 module.exports = {
   processResumeJob,
 };
+

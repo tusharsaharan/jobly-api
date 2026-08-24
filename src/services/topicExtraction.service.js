@@ -1,0 +1,159 @@
+/**
+ * Topic Extraction Service
+ *
+ * Converts freeform interviewer feedback, candidate weaknesses, or growth areas
+ * into canonical topic weaknesses using Gemini with rule-based fallback.
+ */
+
+const { GoogleGenAI } = require("@google/genai");
+const CandidateTopicWeakness = require("../models/CandidateTopicWeakness");
+const { TOPIC_TAXONOMY, matchTopicsFromText, getTopicNames } = require("../constants/topicTaxonomy");
+const ragService = require("./rag.service");
+const logger = require("../config/logger");
+
+let _ai = null;
+function getAI() {
+  if (!_ai) {
+    if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not set");
+    _ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  return _ai;
+}
+
+/**
+ * Extract structured topics from text using LLM, with deterministic fallback.
+ * @param {string} rawText
+ * @returns {Promise<Array<{topic: string, confidence: number}>>}
+ */
+async function extractTopics(rawText) {
+  if (!rawText || rawText.trim().length < 3) return [];
+
+  const canonicalTopics = getTopicNames();
+
+  // Try LLM primary
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const prompt = `
+You are an expert technical evaluation analyzer.
+Analyze the following interview feedback notes/weaknesses and extract all computer science / programming topics where the candidate needs improvement.
+
+Map every identified weakness STRICTLY to one of these canonical topics:
+${JSON.stringify(canonicalTopics)}
+
+Feedback Text:
+"${rawText}"
+
+Return strictly a JSON array of objects with schema:
+[
+  { "topic": "Canonical Topic Name", "confidence": 0.85 }
+]
+Only return topics from the canonical list. Confidence must be between 0.0 and 1.0. If no specific topic weakness is mentioned, return [].
+`;
+
+      const response = await getAI().models.generateContent({
+        model: "gemini-flash-lite-latest",
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+
+      let text = response.text.trim();
+      if (text.startsWith("```")) {
+        text = text.replace(/^```(json)?\n/, "").replace(/\n```$/, "");
+      }
+
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        // Validate against canonical taxonomy
+        return parsed.filter(item => item.topic && TOPIC_TAXONOMY[item.topic] && item.confidence >= 0.5);
+      }
+    } catch (err) {
+      logger.warn({ err: err.message }, "LLM topic extraction failed, using rule-based fallback");
+    }
+  }
+
+  // Rule-based fallback using taxonomy aliases
+  return matchTopicsFromText(rawText);
+}
+
+/**
+ * Process feedback and persist CandidateTopicWeakness records for a candidate.
+ *
+ * @param {object} params
+ * @param {string} params.candidateId
+ * @param {string} params.sourceType - "evaluation" | "interview_note" | "scorecard"
+ * @param {string} params.sourceId
+ * @param {string} params.sourceSessionId
+ * @param {string|string[]} params.feedback - Text or array of strings
+ */
+async function processCandidateFeedback({ candidateId, sourceType, sourceId, sourceSessionId, feedback }) {
+  if (!candidateId || !feedback) return [];
+
+  const rawText = Array.isArray(feedback) ? feedback.join(".\n") : String(feedback);
+  if (!rawText.trim()) return [];
+
+  const extracted = await extractTopics(rawText);
+  if (!extracted || extracted.length === 0) return [];
+
+  const savedWeaknesses = [];
+
+  for (const item of extracted) {
+    const topicInfo = TOPIC_TAXONOMY[item.topic] || { category: "CS_FUNDAMENTALS" };
+
+    // Fetch recommended study resources from RAG
+    let cachedResources = [];
+    try {
+      const chunks = await ragService.retrieve(item.topic, {
+        namespace: "study_resource",
+        topK: 4,
+      });
+
+      cachedResources = chunks
+        .filter(c => c.sourceUrl)
+        .map(c => ({
+          title: c.sourceTitle || c.topic || item.topic,
+          url: c.sourceUrl,
+          description: c.content?.slice(0, 160) || "",
+          retrievedAt: new Date()
+        }));
+    } catch (err) {
+      logger.warn({ err: err.message, topic: item.topic }, "Failed to retrieve resources for weakness");
+    }
+
+    try {
+      const weaknessDoc = await CandidateTopicWeakness.findOneAndUpdate(
+        {
+          candidate: candidateId,
+          topic: item.topic,
+          sourceId: sourceId
+        },
+        {
+          $setOnInsert: {
+            candidate: candidateId,
+            topic: item.topic,
+            category: topicInfo.category,
+            confidence: item.confidence || 0.8,
+            sourceType,
+            sourceId,
+            sourceSession: sourceSessionId || null,
+            rawText: rawText.slice(0, 1000),
+            resolved: false,
+            cachedResources: cachedResources
+          }
+        },
+        { upsert: true, new: true }
+      );
+
+      if (weaknessDoc) savedWeaknesses.push(weaknessDoc);
+    } catch (err) {
+      logger.error({ err: err.message, topic: item.topic }, "Error saving CandidateTopicWeakness");
+    }
+  }
+
+  logger.info({ candidateId, count: savedWeaknesses.length }, "Extracted and saved candidate topic weaknesses");
+  return savedWeaknesses;
+}
+
+module.exports = {
+  extractTopics,
+  processCandidateFeedback,
+};

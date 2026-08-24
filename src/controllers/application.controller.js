@@ -91,8 +91,63 @@ exports.getMyApplications = async (req, res) => {
   }
 };
 
+const { defaultRRFEngine } = require("../modules/search/rrfEngine");
+
+const applicantTextExtractor = (app) => {
+  const seeker = app.seeker || {};
+  const job = app.job || {};
+  const expText = (seeker.experience || []).map((e) => `${e.title || ""} ${e.company || ""}`).join(" ");
+  return `${seeker.name || ""} ${seeker.email || ""} ${job.title || ""} ${(seeker.skills || []).join(" ")} ${seeker.college || ""} ${seeker.degree || ""} ${(seeker.achievements || []).join(" ")} ${expText}`;
+};
+
+/**
+ * Search applicants using Reciprocal Rank Fusion (BM25 + Dense Embeddings)
+ */
+exports.searchApplicants = async (req, res) => {
+  try {
+    const query = String(req.query.q || req.query.search || "").trim();
+    const applications = await Application.find({ recruiter: req.user._id })
+      .populate("job")
+      .populate("seeker", "name email skills cgpa college collegeTier degree achievements experience")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!query) {
+      return res.json(applications);
+    }
+
+    const rrfResults = await defaultRRFEngine.search(applications, applicantTextExtractor, query, {
+      wBM25: 1.0,
+      wDense: 1.0,
+      k: 60,
+    });
+
+    const ranked = rrfResults.map((r) => ({
+      ...r.item,
+      searchMetadata: {
+        rrfScore: r.rrfScore,
+        bm25Score: r.bm25Score,
+        vectorScore: r.vectorScore,
+        bm25Rank: r.bm25Rank,
+        vectorRank: r.vectorRank,
+        matchedTokens: r.matchedTokens,
+      },
+    }));
+
+    res.json(ranked);
+  } catch (error) {
+    logger.error({ err: error.message }, "Failed to search applicants via RRF");
+    res.status(500).json({ msg: "Failed to search applicants" });
+  }
+};
+
 exports.getApplicantsForRecruiter = async (req, res) => {
   try {
+    const queryTerm = String(req.query.q || req.query.search || "").trim();
+    if (queryTerm) {
+      return exports.searchApplicants(req, res);
+    }
+
     const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));

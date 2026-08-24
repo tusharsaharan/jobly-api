@@ -6,6 +6,17 @@ const port = Number(process.env.PORT || 4100);
 const terminals = new Map();
 const maxSessions = Number(process.env.MAX_TERMINAL_SESSIONS || 50);
 const maxOutputBytes = 1024 * 1024;
+const terminalEnvironment = Object.freeze({
+  HOME: "/workspace",
+  XDG_CONFIG_HOME: "/tmp/jobly-terminal/config",
+  XDG_DATA_HOME: "/tmp/jobly-terminal/data",
+  XDG_STATE_HOME: "/tmp/jobly-terminal/state",
+  XDG_CACHE_HOME: "/tmp/jobly-terminal/cache",
+  PATH: "/usr/local/bin:/usr/bin:/bin",
+  TERM: "xterm-256color",
+  SHELL: "/usr/bin/fish",
+  COLORTERM: "truecolor",
+});
 
 function sendJson(response, status, payload) {
   response.writeHead(status, { "Content-Type": "application/json" });
@@ -53,17 +64,12 @@ const server = http.createServer(async (request, response) => {
       const { sessionId, cols = 80, rows = 24 } = await readBody(request);
       if (!sessionId) return sendJson(response, 400, { msg: "sessionId is required" });
       const terminalId = `term_${crypto.randomUUID()}`;
-      const process = pty.spawn("/bin/bash", ["--noprofile", "--norc"], {
+      const process = pty.spawn("/usr/bin/fish", [], {
         name: "xterm-256color",
         cols: Math.max(20, Math.min(240, Number(cols))),
         rows: Math.max(5, Math.min(100, Number(rows))),
         cwd: "/workspace",
-        env: {
-          HOME: "/workspace",
-          PATH: "/usr/local/bin:/usr/bin:/bin",
-          TERM: "xterm-256color",
-          PS1: "jobly@terminal:\\w$ ",
-        },
+        env: terminalEnvironment,
       });
       const terminal = { terminalId, sessionId, process, pendingOutput: "", lastActivity: Date.now() };
       process.onData((data) => {

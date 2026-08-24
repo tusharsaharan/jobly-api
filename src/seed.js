@@ -6,6 +6,8 @@ const Job = require("./models/Job");
 const Application = require("./models/Application");
 const InterviewSession = require("./models/InterviewSession");
 const TimelineEvent = require("./models/TimelineEvent");
+const CodeCheckpoint = require("./models/CodeCheckpoint");
+const WhiteboardSnapshot = require("./models/WhiteboardSnapshot");
 const Evaluation = require("./models/Evaluation");
 
 async function seed() {
@@ -305,9 +307,15 @@ export class DistributedCache<T> {
 
   // 6. Create Completed Interview with Recruiter Evaluation & Feedback
   const roomKey2 = "room-demo-evaluated-session";
-  let session2 = await InterviewSession.findOne({ roomKey: roomKey2 });
-  if (!session2) {
-    session2 = await InterviewSession.create({
+  let existingSession2 = await InterviewSession.findOne({ roomKey: roomKey2 });
+  if (existingSession2) {
+    await TimelineEvent.deleteMany({ session: existingSession2._id });
+    await CodeCheckpoint.deleteMany({ session: existingSession2._id });
+    await Evaluation.deleteMany({ session: existingSession2._id });
+    await InterviewSession.deleteOne({ _id: existingSession2._id });
+  }
+
+  const session2 = await InterviewSession.create({
       tenantId: "default",
       application: app2._id,
       job: job2._id,
@@ -341,15 +349,192 @@ export function createCollaborativeDoc() {
       }
     });
 
-    const evalTimelineEvent = await TimelineEvent.create({
+    const timelineEvents = await TimelineEvent.create([
+      {
+        session: session2._id,
+        pipeline: "STAGE",
+        eventType: "stage.transition",
+        offsetMs: 0,
+        participant: recruiter._id,
+        participantRole: "recruiter",
+        payload: { stage: "INTRODUCTION" },
+      },
+      {
+        session: session2._id,
+        pipeline: "COMMUNICATION",
+        eventType: "transcript.segment",
+        offsetMs: 5000,
+        participant: recruiter._id,
+        participantRole: "recruiter",
+        payload: { text: "Hi Alex! Welcome to the Staff Frontend Architect interview round." },
+      },
+      {
+        session: session2._id,
+        pipeline: "COMMUNICATION",
+        eventType: "transcript.segment",
+        offsetMs: 15000,
+        participant: seeker._id,
+        participantRole: "seeker",
+        payload: { text: "Hello Sarah! Glad to be here." },
+      },
+      {
+        session: session2._id,
+        pipeline: "COMMUNICATION",
+        eventType: "transcript.segment",
+        offsetMs: 180000,
+        participant: seeker._id,
+        participantRole: "seeker",
+        payload: { text: "Thanks Sarah! Excited to dive in. I'm ready to walk through state vectors and conflict-free data types." },
+      },
+      {
+        session: session2._id,
+        pipeline: "STAGE",
+        eventType: "stage.transition",
+        offsetMs: 300000,
+        participant: recruiter._id,
+        participantRole: "recruiter",
+        payload: { stage: "CODING" },
+      },
+      {
+        session: session2._id,
+        pipeline: "COMMUNICATION",
+        eventType: "transcript.segment",
+        offsetMs: 600000,
+        participant: seeker._id,
+        participantRole: "seeker",
+        payload: { text: "I'll start by implementing the collaborative document wrapper with Y.Doc and state vector exchange." },
+      },
+      {
+        session: session2._id,
+        pipeline: "COMMUNICATION",
+        eventType: "transcript.segment",
+        offsetMs: 900000,
+        participant: seeker._id,
+        participantRole: "seeker",
+        payload: { text: "We encode the document state update using Y.encodeStateAsUpdate and broadcast over WebSocket." },
+      },
+      {
+        session: session2._id,
+        pipeline: "STAGE",
+        eventType: "stage.transition",
+        offsetMs: 1500000,
+        participant: recruiter._id,
+        participantRole: "recruiter",
+        payload: { stage: "SYSTEM_DESIGN" },
+      },
+      {
+        session: session2._id,
+        pipeline: "COMMUNICATION",
+        eventType: "transcript.segment",
+        offsetMs: 1680000,
+        participant: recruiter._id,
+        participantRole: "recruiter",
+        payload: { text: "That code looks solid. Let's switch to system design and map out the media gateway and signaling architecture." },
+      },
+      {
+        session: session2._id,
+        pipeline: "COMMUNICATION",
+        eventType: "transcript.segment",
+        offsetMs: 2100000,
+        participant: seeker._id,
+        participantRole: "seeker",
+        payload: { text: "Clients establish peer connections to our LiveKit SFU cluster, while cursor awareness is multiplexed over Redis Pub/Sub." },
+      },
+      {
+        session: session2._id,
+        pipeline: "STAGE",
+        eventType: "stage.transition",
+        offsetMs: 2700000,
+        participant: recruiter._id,
+        participantRole: "recruiter",
+        payload: { stage: "FEEDBACK" },
+      },
+      {
+        session: session2._id,
+        pipeline: "COMMUNICATION",
+        eventType: "transcript.segment",
+        offsetMs: 2850000,
+        participant: recruiter._id,
+        participantRole: "recruiter",
+        payload: { text: "Fantastic performance today Alex. Your grasp of distributed frontend state and low-latency WebRTC is top notch." },
+      },
+      {
+        session: session2._id,
+        pipeline: "STAGE",
+        eventType: "session.completed",
+        offsetMs: 3000000,
+        participant: recruiter._id,
+        participantRole: "recruiter",
+        payload: { stage: "COMPLETED", status: "COMPLETED" },
+      },
+    ]);
+
+    await CodeCheckpoint.create({
       session: session2._id,
-      pipeline: "STAGE",
-      eventType: "session.completed",
-      offsetMs: 3000000,
-      participant: recruiter._id,
-      participantRole: "recruiter",
-      payload: { stage: "COMPLETED", status: "COMPLETED" }
+      sequenceNumber: 1,
+      triggerType: "MANUAL",
+      triggerLabel: "Initial Starter Workspace",
+      offsetMs: 0,
+      filesSnapshot: [
+        {
+          name: "crdtSync.ts",
+          path: "/crdtSync.ts",
+          content: `// Candidate implementation of state vector exchange and binary sync
+import * as Y from "yjs";
+
+export function createCollaborativeDoc() {
+  const doc = new Y.Doc();
+  const text = doc.getText("content");
+  return { doc, text };
+}
+`,
+          language: "typescript",
+        },
+      ],
     });
+
+    await CodeCheckpoint.create({
+      session: session2._id,
+      sequenceNumber: 2,
+      triggerType: "EXECUTION",
+      triggerLabel: "CRDT State Sync & Vector Implementation",
+      offsetMs: 1500000,
+      filesSnapshot: [
+        {
+          name: "crdtSync.ts",
+          path: "/crdtSync.ts",
+          content: `// Candidate implementation of state vector exchange and binary sync
+import * as Y from "yjs";
+
+export function createCollaborativeDoc() {
+  const doc = new Y.Doc();
+  const text = doc.getText("content");
+  return { doc, text };
+}
+
+export function syncStateVectors(localDoc: Y.Doc, remoteVector: Uint8Array): Uint8Array {
+  return Y.encodeStateAsUpdate(localDoc, remoteVector);
+}
+`,
+          language: "typescript",
+        },
+      ],
+    });
+
+    await WhiteboardSnapshot.create({
+      session: session2._id,
+      sequenceNumber: 1,
+      boardType: "EXCALIDRAW",
+      offsetMs: 900000,
+      canvasWidth: 1920,
+      canvasHeight: 1080,
+      objects: [
+        { id: "1", type: "rectangle", x: 100, y: 100, width: 200, height: 100 },
+        { id: "2", type: "rectangle", x: 400, y: 100, width: 200, height: 100 },
+      ],
+    });
+
+    const evalTimelineEvent = timelineEvents[timelineEvents.length - 1];
 
     // Create Candidate Feedback Scorecard from Recruiter
     await Evaluation.create({
@@ -399,14 +584,13 @@ export function createCollaborativeDoc() {
       improvementFeedback: "To excel even further at Staff/Principal levels, look into zero-copy binary serialization over WebSockets (e.g. Protocol Buffers vs Cap'n Proto) for ultra-high-frequency telemetry channels."
     });
     console.log("Created Completed Interview with Feedback:", roomKey2);
-  }
 
   console.log("\n=======================================================");
-  console.log("🎉 SEEDING COMPLETE! You can log in with:");
-  console.log("👉 Candidate Login:  candidate@example.com / password123");
-  console.log("👉 Recruiter Login:  recruiter@techcorp.com / password123");
-  console.log("👉 Live Demo Room:   http://localhost:3001/interview/room-demo-techcorp-live");
-  console.log("👉 Replay Demo Room: http://localhost:3001/interview/room-demo-evaluated-session/replay");
+  console.log(" SEEDING COMPLETE! You can log in with:");
+  console.log("Candidate Login:  candidate@example.com / password123");
+  console.log(" Recruiter Login:  recruiter@techcorp.com / password123");
+  console.log("Live Demo Room:   http://localhost:3001/interview/room-demo-techcorp-live");
+  console.log(" Replay Demo Room: http://localhost:3001/interview/room-demo-evaluated-session/replay");
   console.log("=======================================================\n");
 
   await mongoose.disconnect();

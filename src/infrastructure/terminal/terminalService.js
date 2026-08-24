@@ -34,6 +34,9 @@ function getDefaultShell() {
  */
 function createTerminalSession(sessionId, cols = 80, rows = 24, onDataCallback) {
   if (terminalRunnerUrl) return createRemoteTerminalSession(sessionId, cols, rows, onDataCallback);
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Interactive terminal is unavailable: TERMINAL_RUNNER_URL is not configured. Refusing to expose a host shell.");
+  }
   const terminalId = `term_${crypto.randomUUID()}`;
   let ptyProcess;
 

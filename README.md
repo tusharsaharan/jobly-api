@@ -1,186 +1,102 @@
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0d1117,50:161b22,100:1f6feb&height=220&section=header&text=JobMatch%20API&fontSize=65&fontColor=58a6ff&fontAlignY=35&animation=twinkling&desc=AI-Powered%20Recruitment%20Backend%20%7C%20Google%20Gemini&descSize=16&descAlignY=55&descAlign=50" width="100%" alt="JobMatch API Header" />
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0d1117,50:161b22,100:1f6feb&height=220&section=header&text=Jobly%20API%20Platform&fontSize=60&fontColor=58a6ff&fontAlignY=35&animation=twinkling&desc=Distributed%20AI%20Recruitment%20%7C%20Live%20Interview%20Orchestrator%20%7C%20Deterministic%20ATS&descSize=15&descAlignY=55&descAlign=50" width="100%" alt="Jobly API Platform Header" />
 </p>
 
 <p align="center">
-  <img src="https://readme-typing-svg.herokuapp.com?font=JetBrains+Mono&size=22&pause=1000&color=58A6FF&center=true&vCenter=true&multiline=true&repeat=true&width=700&height=100&lines=%F0%9F%94%8D+AI+Resume+Parsing+%E2%80%A2+ATS+Match+Scoring;%F0%9F%A4%96+Powered+by+Google+Gemini+Flash+Lite;%F0%9F%9B%A1%EF%B8%8F+Role-Based+Auth+%E2%80%A2+44+Tests+Passing" alt="Typing SVG" />
+  <img src="https://readme-typing-svg.herokuapp.com?font=JetBrains+Mono&size=20&pause=1000&color=58A6FF&center=true&vCenter=true&multiline=true&repeat=true&width=800&height=100&lines=%F0%9F%A4%96+Google+Gemini+LLM+Resume+Extraction;%F0%9F%8E%AF+Deterministic+ATS+Role-Fit+Scoring+(Schema+v1);%F0%9F%92%BB+Real-Time+Yjs+CRDT+%2B+Monaco+Sync+%2B+Multi-Language+Sandbox;%F0%9F%9B%A1%EF%B8%8F+Zero-Trust+Security+%E2%80%A2+Prometheus+Metrics+%E2%80%A2+36+Jest+Suites" alt="Typing SVG" />
 </p>
 
 <p align="center">
   <a href="https://github.com/tusharsaharan/job-recommender-api/stargazers"><img src="https://img.shields.io/github/stars/tusharsaharan/job-recommender-api?style=for-the-badge&logo=github&color=f4dbd6&logoColor=D9E0EE&labelColor=302D41" alt="Stars" /></a>
   <a href="https://github.com/tusharsaharan/job-recommender-api/network/members"><img src="https://img.shields.io/github/forks/tusharsaharan/job-recommender-api?style=for-the-badge&logo=git&color=a6da95&logoColor=D9E0EE&labelColor=302D41" alt="Forks" /></a>
-  <a href="https://github.com/tusharsaharan/job-recommender-api/issues"><img src="https://img.shields.io/github/issues/tusharsaharan/job-recommender-api?style=for-the-badge&logo=gitbook&color=eed49f&logoColor=D9E0EE&labelColor=302D41" alt="Issues" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/Tests-44%20Passed-a6da95?style=for-the-badge&logo=jest&logoColor=D9E0EE&labelColor=302D41" alt="Tests" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/Coverage-70%25-eed49f?style=for-the-badge&logo=codecov&logoColor=D9E0EE&labelColor=302D41" alt="Coverage" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/Tests-36%20Suites%20Passing-a6da95?style=for-the-badge&logo=jest&logoColor=D9E0EE&labelColor=302D41" alt="Tests" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/Coverage-Comprehensive-eed49f?style=for-the-badge&logo=codecov&logoColor=D9E0EE&labelColor=302D41" alt="Coverage" /></a>
 </p>
 
 [![divider](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)](https://github.com/tusharsaharan/job-recommender-api)
 
-## 🧬 About
-
-<img align="right" src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcHg4amFtN3ltcjQxaXJ6YTE4dXJ1Y3E3dW80MHV4aGRzenh4eXE4biZlcD12MV9naWZzX3NlYXJjaCZjdD1n/qgQUggAC3Pfv687qPC/giphy.gif" width="280" alt="API Animation" />
+## 🧬 Overview
 
 ```javascript
-const JobMatchAPI = {
-    name: "JobMatch API",
-    type: "AI-Powered Recruitment Backend",
-    engine: "Google Gemini Flash Lite",
+const JoblyAPI = {
+    name: "Jobly API Platform",
+    version: "2.0.0",
+    engine: "Google Gemini Flash Lite + OpenAI Cascade",
     stack: {
-        runtime: "Node.js",
+        runtime: "Node.js 20+",
         framework: "Express.js",
-        database: "MongoDB + Mongoose",
-        auth: "JWT + Bcrypt",
-        ai: "@google/genai"
+        realtime: "Yjs CRDT + Socket.IO + WebSocket",
+        media: "LiveKit WebRTC SFU",
+        database: "MongoDB 7.0 + Redis 7.2",
+        storage: "MinIO S3",
+        queues: "BullMQ + Temporal Workflows",
+        metrics: "Prometheus + OpenTelemetry"
     },
     features: [
-        "AI Resume Parsing (PDF → Structured Data)",
-        "AI Job Description Generation",
-        "Real-time ATS Match Scoring",
-        "Role-Based Access Control",
-        "LLM Output Sanitization"
+        "AI Resume Ingestion & MinIO Storage Pipeline",
+        "Deterministic ATS Role-Fit Scoring (Schema ats-analysis/2026-08-v1)",
+        "Collaborative Live Interview IDE (Monaco + Yjs + LSP Gateway)",
+        "Multi-Language Execution Sandbox (Python, JS, TS, C++, Java, Go, Ruby, Rust)",
+        "Containerized PTY Terminal Streaming",
+        "LiveKit WebRTC Video/Audio Conferencing",
+        "AI Co-Interviewer Copilot & Bar Raiser Scorecard Generator",
+        "Time-Travel Session Replay & High-Resolution Timeline Scrubber"
     ],
-    tests: { passed: 44, suites: 5 }
+    testSuites: 36
 };
 ```
 
-<br clear="right" />
+---
 
-> **JobMatch API** replaces traditional keyword matching with **Google Gemini LLM intelligence**. It parses PDF resumes into structured data, auto-generates ATS-optimized job postings from plain English, and computes real-time compatibility scores with actionable feedback — all behind a hardened, role-based Express.js API.
-
-[![divider](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)](https://github.com/tusharsaharan/job-recommender-api)
-
-## ⚡ Tech Stack
+## ⚡ Tech Stack & Protocols
 
 <p align="center">
-  <a href="https://skillicons.dev">
-    <img src="https://skillicons.dev/icons?i=nodejs,express,mongodb,jest&theme=dark&perline=8" alt="Tech Stack" />
-  </a>
+  <img src="https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js" />
+  <img src="https://img.shields.io/badge/Express-000000?style=flat-square&logo=express&logoColor=white" alt="Express" />
+  <img src="https://img.shields.io/badge/MongoDB_7.0-47A248?style=flat-square&logo=mongodb&logoColor=white" alt="MongoDB" />
+  <img src="https://img.shields.io/badge/Redis_7.2-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis" />
+  <img src="https://img.shields.io/badge/Google_Gemini-8E75B2?style=flat-square&logo=googlegemini&logoColor=white" alt="Google Gemini" />
+  <img src="https://img.shields.io/badge/Yjs_CRDT-010101?style=flat-square&logo=yjs&logoColor=white" alt="Yjs" />
+  <img src="https://img.shields.io/badge/Socket.IO-010101?style=flat-square&logo=socketdotio&logoColor=white" alt="Socket.IO" />
+  <img src="https://img.shields.io/badge/LiveKit_WebRTC-20C997?style=flat-square&logo=webrtc&logoColor=white" alt="LiveKit" />
+  <img src="https://img.shields.io/badge/Prometheus-E6522C?style=flat-square&logo=prometheus&logoColor=white" alt="Prometheus" />
+  <img src="https://img.shields.io/badge/MinIO_S3-C72C48?style=flat-square&logo=minio&logoColor=white" alt="MinIO" />
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Google%20Gemini-8E75B2?style=flat-square&logo=googlegemini&logoColor=white" alt="Google Gemini" />
-  <img src="https://img.shields.io/badge/JWT-000000?style=flat-square&logo=jsonwebtokens&logoColor=white" alt="JWT" />
-  <img src="https://img.shields.io/badge/Multer-FF6600?style=flat-square&logo=files&logoColor=white" alt="Multer" />
-  <img src="https://img.shields.io/badge/pdf--parse-E34F26?style=flat-square&logo=adobeacrobatreader&logoColor=white" alt="pdf-parse" />
-  <img src="https://img.shields.io/badge/Bcrypt-003A70?style=flat-square&logo=letsencrypt&logoColor=white" alt="Bcrypt" />
-  <img src="https://img.shields.io/badge/Mongoose-880000?style=flat-square&logo=mongoose&logoColor=white" alt="Mongoose" />
-</p>
+---
 
-[![divider](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)](https://github.com/tusharsaharan/job-recommender-api)
-
-## 🏗️ Architecture
+## 🏗️ Architecture & WebSocket Upgrade Pipeline
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        CLIENT REQUEST                           │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  ┌──────────┐  ┌──────────────┐  ┌───────────────────────────┐  │
-│  │  CORS    │→ │ Body Parser  │→ │  JWT Auth Middleware       │  │
-│  │  Guard   │  │ (10kb limit) │  │  + Role-Based Access      │  │
-│  └──────────┘  └──────────────┘  └───────────────────────────┘  │
-│                      EXPRESS MIDDLEWARE PIPELINE                  │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-          ▼                ▼                ▼
-   ┌─────────────┐ ┌─────────────┐ ┌──────────────┐
-   │ Auth Routes │ │ Job Routes  │ │ Resume Routes│
-   │  /api/auth  │ │  /api/jobs  │ │ /api/resume  │
-   └──────┬──────┘ └──────┬──────┘ └──────┬───────┘
-          │                │                │
-          ▼                ▼                ▼
-   ┌─────────────┐ ┌─────────────┐ ┌──────────────┐
-   │   Auth      │ │    Job      │ │   Resume     │
-   │ Controller  │ │ Controller  │ │  Controller  │
-   └──────┬──────┘ └──────┬──────┘ └──────┬───────┘
-          │                │                │
-          │         ┌──────┴──────┐         │
-          │         │             │         │
-          │         ▼             │         ▼
-          │  ┌─────────────┐     │  ┌──────────────┐
-          │  │ AI Service  │     │  │  Multer +    │
-          │  │ (Gemini     │     │  │  PDF Parse   │
-          │  │  Flash Lite)│     │  │  Pipeline    │
-          │  └──────┬──────┘     │  └──────┬───────┘
-          │         │             │         │
-          ▼         ▼             ▼         ▼
-   ┌──────────────────────────────────────────────┐
-   │              MongoDB + Mongoose               │
-   │    Users │ Jobs │ Applications │ Messages     │
-   └──────────────────────────────────────────────┘
+                               ┌────────────────────────┐
+                               │   Incoming HTTP / WS   │
+                               └───────────┬────────────┘
+                                           │
+                        ┌──────────────────┴──────────────────┐
+                        ▼                                     ▼
+             [Standard HTTP Request]                [HTTP Upgrade Request]
+                        │                                     │
+                        ▼                                     ├─► /collab/:room    ──► Yjs Document Coordinator
+            [Express Security Stack]                          ├─► /whiteboard/:id  ──► Yjs Excalidraw Coordinator
+             (Helmet, CORS, RateLimiter)                      ├─► /lsp/:room/:lang ──► LSP Gateway (Pyright, TS, Clangd)
+                        │                                     └─► /socket.io/      ──► Socket.IO Redis Cluster
+            [JWT Auth & RBAC Guard]
+                        │
+       ┌────────────────┼────────────────┬────────────────┐
+       ▼                ▼                ▼                ▼
+[Auth Controller] [Job Controller] [Resume Pipeline] [Interview Controller]
+       │                │                │                │
+       ▼                ▼                ▼                ▼
+[Bcrypt/JWT]      [Gemini Gen]    [MinIO / BullMQ] [Sandbox / Terminal / AI Copilot]
+       │                │                │                │
+       └────────────────┴───────┬────────┴────────────────┘
+                                ▼
+                   [MongoDB + Redis Datastores]
 ```
 
-[![divider](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)](https://github.com/tusharsaharan/job-recommender-api)
+---
 
-## ✨ Key Features
-
-<table>
-  <tr>
-    <td align="center" width="25%">
-      <img src="https://img.icons8.com/fluency/48/artificial-intelligence.png" width="36" alt="AI" /><br />
-      <b>AI Resume Parsing</b><br />
-      <sub>Upload PDF → structured skills, education & achievements via Gemini Flash Lite</sub>
-    </td>
-    <td align="center" width="25%">
-      <img src="https://img.icons8.com/fluency/48/briefcase.png" width="36" alt="Jobs" /><br />
-      <b>AI Job Generation</b><br />
-      <sub>Describe a role in plain English → AI auto-fills ATS-optimized requirements</sub>
-    </td>
-    <td align="center" width="25%">
-      <img src="https://img.icons8.com/fluency/48/match.png" width="36" alt="Match" /><br />
-      <b>ATS Match Scoring</b><br />
-      <sub>Real-time resume ↔ job compatibility scores with actionable improvement tips</sub>
-    </td>
-    <td align="center" width="25%">
-      <img src="https://img.icons8.com/fluency/48/lock-2.png" width="36" alt="Security" /><br />
-      <b>Hardened Security</b><br />
-      <sub>JWT RBAC, LLM output sanitization, rate-limit fallbacks, strict body limits</sub>
-    </td>
-  </tr>
-</table>
-
-[![divider](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)](https://github.com/tusharsaharan/job-recommender-api)
-
-## 🚀 Quick Start
-
-```bash
-# Clone
-git clone https://github.com/tusharsaharan/job-recommender-api.git
-cd job-recommender-api
-
-# Install
-npm install
-
-# Configure (.env)
-cp .env.example .env
-# Edit .env with your MongoDB URI, JWT Secret, and Gemini API Key
-
-# Run
-npm run dev
-
-# Test
-npm test
-```
-
-<details>
-<summary><b>📝 Environment Variables</b></summary>
-
-```env
-PORT=5000
-MONGO_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret
-GEMINI_API_KEY=your_google_gemini_api_key
-```
-
-</details>
-
-[![divider](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)](https://github.com/tusharsaharan/job-recommender-api)
-
-## 📡 API Reference
+## 📡 Complete REST API Reference
 
 <table>
   <thead>
@@ -188,121 +104,72 @@ GEMINI_API_KEY=your_google_gemini_api_key
       <th>Method</th>
       <th>Endpoint</th>
       <th>Description</th>
-      <th>Auth</th>
+      <th>Access</th>
     </tr>
   </thead>
   <tbody>
-    <tr><td><code>POST</code></td><td><code>/api/auth/register</code></td><td>Register new user (seeker / recruiter)</td><td>—</td></tr>
-    <tr><td><code>POST</code></td><td><code>/api/auth/login</code></td><td>Authenticate & receive JWT</td><td>—</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/users/me</code></td><td>Get current user profile</td><td>🔒</td></tr>
-    <tr><td><code>POST</code></td><td><code>/api/resume/upload</code></td><td>Upload PDF → AI-parsed resume</td><td>🔒 seeker</td></tr>
-    <tr><td><code>POST</code></td><td><code>/api/jobs</code></td><td>Create a new job posting</td><td>🔒 recruiter</td></tr>
-    <tr><td><code>POST</code></td><td><code>/api/jobs/ai-generate</code></td><td>AI-generate job from description</td><td>🔒 recruiter</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/jobs</code></td><td>List jobs (filtered by role)</td><td>🔒</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/jobs/match</code></td><td>ATS-scored job feed for seekers</td><td>🔒 seeker</td></tr>
-    <tr><td><code>POST</code></td><td><code>/api/applications/:jobId</code></td><td>Apply to a job (ATS gate)</td><td>🔒 seeker</td></tr>
-    <tr><td><code>PATCH</code></td><td><code>/api/applications/:id/status</code></td><td>Shortlist / reject applicant</td><td>🔒 recruiter</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/applications/me</code></td><td>View seeker's applications</td><td>🔒 seeker</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/applications/recruiter</code></td><td>View recruiter's applicants</td><td>🔒 recruiter</td></tr>
-    <tr><td><code>POST</code></td><td><code>/api/messages/application/:id</code></td><td>Send message in application thread</td><td>🔒</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/messages/application/:id</code></td><td>Load message history</td><td>🔒</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/health</code></td><td>Cluster health check & service status</td><td>Public</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/metrics</code></td><td>Prometheus metrics scraper endpoint</td><td>Public</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/auth/register</code></td><td>Create candidate or recruiter account</td><td>Public</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/auth/login</code></td><td>Authenticate & issue signed JWT</td><td>Public</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/users/me</code></td><td>Fetch authenticated user profile</td><td>🔒 Any</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/resume/upload</code></td><td>Upload PDF resume to MinIO S3 & parse</td><td>🔒 Seeker</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/resume/me</code></td><td>Get latest structured resume profile</td><td>🔒 Seeker</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/jobs</code></td><td>Create job posting</td><td>🔒 Recruiter</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/jobs/ai-generate</code></td><td>Generate job criteria from natural language prompt</td><td>🔒 Recruiter</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/jobs</code></td><td>List jobs with search & filter parameters</td><td>🔒 Any</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/jobs/match</code></td><td>Get candidate personalized ATS-matched jobs</td><td>🔒 Seeker</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/applications/:jobId</code></td><td>Submit application with ATS match scoring</td><td>🔒 Seeker</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/applications/me</code></td><td>Retrieve seeker application list</td><td>🔒 Seeker</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/applications/recruiter</code></td><td>Retrieve recruiter candidate pipeline</td><td>🔒 Recruiter</td></tr>
+    <tr><td><code>PATCH</code></td><td><code>/api/applications/:id/status</code></td><td>Update application stage (Shortlist/Reject/Offer)</td><td>🔒 Recruiter</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/messages/application/:id</code></td><td>Send message in application thread</td><td>🔒 Participant</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/messages/application/:id</code></td><td>Fetch message history</td><td>🔒 Participant</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/interviews/schedule</code></td><td>Schedule interview & allocate roomKey</td><td>🔒 Recruiter</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/interviews/:sessionId</code></td><td>Get interview room state & credentials</td><td>🔒 Participant</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/interviews/:sessionId/token</code></td><td>Mint LiveKit WebRTC access token</td><td>🔒 Participant</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/coding/execute</code></td><td>Execute code inside isolated sandbox (8 languages)</td><td>🔒 Participant</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/coding/test</code></td><td>Run automated unit test suite</td><td>🔒 Participant</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/coding/terminal</code></td><td>Spawn interactive containerized PTY terminal</td><td>🔒 Participant</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/timeline/event</code></td><td>Record timestamped session event</td><td>🔒 Participant</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/replay/:sessionId</code></td><td>Fetch chronological timeline playback stream</td><td>🔒 Recruiter</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/evaluations/generate</code></td><td>AI Bar Raiser scorecard generation</td><td>🔒 Recruiter</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/evaluations/:sessionId</code></td><td>Submit final evaluation scorecard & decision</td><td>🔒 Recruiter</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/ats/analyze</code></td><td>Deterministic ATS role-fit scoring computation</td><td>🔒 Any</td></tr>
   </tbody>
 </table>
 
-[![divider](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)](https://github.com/tusharsaharan/job-recommender-api)
+---
 
-## 🧪 Testing
-
-```
-Test Suites:  5 passed, 5 total
-Tests:        44 passed, 44 total
-
- ✅ Auth API Integration       — 7 tests
- ✅ Job API Integration        — 5 tests
- ✅ Application API Integration — 6 tests
- ✅ Message API Integration    — 5 tests
- ✅ JobLogic Unit Tests        — 21 tests
-```
+## 🧪 Testing Suite (36 Jest Suites)
 
 ```bash
-npm test                # Run all tests
-npm run test:coverage   # Run with coverage report
+# Run all unit, integration, and chaos test suites
+npm test
+
+# Run with coverage instrumentation
+npm run test:coverage
 ```
 
-[![divider](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)](https://github.com/tusharsaharan/job-recommender-api)
-
-## 📂 Project Structure
-
-```
-job-recommender-api/
-├── src/
-│   ├── controllers/       # Route handlers (auth, job, resume, application, message)
-│   ├── middleware/         # JWT auth, role guard, file upload (Multer)
-│   ├── models/            # Mongoose schemas (User, Job, Application, Message)
-│   ├── routes/            # Express route definitions
-│   ├── services/          # AI service (Gemini client, lazy-loading, sanitization)
-│   ├── utils/             # Job matching logic, skill normalization, ATS scoring
-│   ├── config/            # Database connection
-│   ├── app.js             # Express app configuration
-│   └── server.js          # Entry point
-├── tests/
-│   ├── integration/       # API endpoint tests
-│   ├── unit/              # Pure logic tests
-│   └── setup.js           # MongoDB Memory Server bootstrap
-├── .env.example
-├── jest.config.js
-└── package.json
-```
-
-[![divider](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)](https://github.com/tusharsaharan/job-recommender-api)
-
-## 🔗 Related Repositories
-
-<table>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/tusharsaharan/job-recommender-web">
-        <img src="https://img.shields.io/badge/Frontend-Jobly_Web-58a6ff?style=for-the-badge&logo=react&logoColor=white" alt="Frontend" />
-      </a>
-      <br />
-      <sub>TanStack Start + React 19 + TypeScript + React Three Fiber</sub>
-    </td>
-  </tr>
-</table>
-
-[![divider](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)](https://github.com/tusharsaharan/job-recommender-api)
-
-## 🤝 Contributing
-
-```bash
-# 1. Fork it
-# 2. Create your feature branch
-git checkout -b feature/amazing-feature
-
-# 3. Commit your changes
-git commit -m 'feat: add amazing feature'
-
-# 4. Push to the branch
-git push origin feature/amazing-feature
-
-# 5. Open a Pull Request
-```
-
-## 📜 License
-
-Distributed under the **MIT License**.
+### Test Suite Map
+- `tests/unit/`: ATS scoring math, AI cascades, LSP gateway, LiveKit service, Checkpoint service, Membership RBAC, Sandboxes, Transcription, Yjs WebSocket & CRDT syncing.
+- `tests/integration/`: Auth, Jobs, Applications, Messages, Coding, Evaluations, Invites, Replays, Timelines, Security Hardening.
+- `tests/chaos/`: Yjs CRDT fuzzing, Redis multi-socket matrix, PTY sandbox escapes, ATS adversarial inputs, Workflow race condition guards.
 
 ---
 
-<p align="center">
-  <b>Built with ❤️ by <a href="https://github.com/tusharsaharan">Tushar Saharan</a></b>
-</p>
+## 🚀 Local Development
 
-<p align="center">
-  <a href="https://github.com/tusharsaharan"><img src="https://img.shields.io/badge/GitHub-tusharsaharan-181717?style=for-the-badge&logo=github" alt="GitHub" /></a>
-  <a href="https://linkedin.com/in/tusharsaharan"><img src="https://img.shields.io/badge/LinkedIn-tusharsaharan-0A66C2?style=for-the-badge&logo=linkedin" alt="LinkedIn" /></a>
-</p>
+```bash
+# Install dependencies
+npm install
 
-<p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0d1117,50:161b22,100:1f6feb&height=120&section=footer" width="100%" alt="Footer" />
-</p>
+# Start development server
+npm run dev
+```
+
+---
+
+## 📜 License
+
+Distributed under the **MIT License**. Built with ❤️ by **[Tushar Saharan](https://github.com/tusharsaharan)**.

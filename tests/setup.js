@@ -5,19 +5,25 @@ const mongoose = require("mongoose");
 let mongoServer;
 
 beforeAll(async () => {
-  // Use in-memory MongoDB
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
+  }
   mongoServer = await MongoMemoryServer.create();
   const mongoUri = mongoServer.getUri();
   process.env.MONGO_URI = mongoUri;
   process.env.JWT_SECRET = "testsecret123";
 
-  await mongoose.connect(mongoUri);
+  await mongoose.connect(mongoUri, {
+    serverSelectionTimeoutMS: 5000,
+  });
 });
 
 afterAll(async () => {
-  await mongoose.disconnect();
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.connection.close(false);
+  }
   if (mongoServer) {
-    await mongoServer.stop();
+    await mongoServer.stop({ doCleanup: true, force: true });
   }
 });
 

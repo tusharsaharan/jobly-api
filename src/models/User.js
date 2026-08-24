@@ -18,6 +18,13 @@ const userSchema = new mongoose.Schema({
   collegeTier: { type: String, enum: ["tier1", "tier2", "tier3", "unknown"], default: "unknown" },
   achievements: [{ type: String }],
   experience: [{ title: String, company: String, duration: String }],
+  resumeProfile: { type: Object, default: null },
+  resumeHealth: { type: Object, default: null },
+  themePreference: { type: String, enum: ["system", "light", "dark"], default: "system" },
+  focusPoints: { type: Number, default: 0 },
+  currentStreak: { type: Number, default: 0 },
+  lastFocusDate: { type: Date, default: null },
+  codeforcesHandle: { type: String, trim: true, default: null },
 }, { timestamps: true });
 
 userSchema.index({ role: 1 });

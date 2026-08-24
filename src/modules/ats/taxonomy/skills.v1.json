@@ -1,0 +1,257 @@
+{
+  "version": "skills-taxonomy/2026-08-v1",
+  "skills": [
+    {
+      "id": "skill_javascript",
+      "label": "JavaScript",
+      "category": "frontend",
+      "aliases": ["javascript", "js", "ecmascript", "es6", "es2020", "es2022", "vanilla js"]
+    },
+    {
+      "id": "skill_typescript",
+      "label": "TypeScript",
+      "category": "frontend",
+      "aliases": ["typescript", "ts"]
+    },
+    {
+      "id": "skill_react",
+      "label": "React",
+      "category": "frontend",
+      "aliases": ["react", "react.js", "reactjs", "react 18", "react 19"]
+    },
+    {
+      "id": "skill_nextjs",
+      "label": "Next.js",
+      "category": "frontend",
+      "aliases": ["next.js", "nextjs", "next 14", "next 15"]
+    },
+    {
+      "id": "skill_vue",
+      "label": "Vue.js",
+      "category": "frontend",
+      "aliases": ["vue", "vue.js", "vuejs", "vue3", "vue 3"]
+    },
+    {
+      "id": "skill_angular",
+      "label": "Angular",
+      "category": "frontend",
+      "aliases": ["angular", "angularjs", "angular 2+"]
+    },
+    {
+      "id": "skill_tailwind",
+      "label": "Tailwind CSS",
+      "category": "frontend",
+      "aliases": ["tailwind", "tailwindcss", "tailwind css"]
+    },
+    {
+      "id": "skill_nodejs",
+      "label": "Node.js",
+      "category": "backend",
+      "aliases": ["node.js", "nodejs", "node js", "node"]
+    },
+    {
+      "id": "skill_express",
+      "label": "Express.js",
+      "category": "backend",
+      "aliases": ["express", "express.js", "expressjs"]
+    },
+    {
+      "id": "skill_nestjs",
+      "label": "NestJS",
+      "category": "backend",
+      "aliases": ["nestjs", "nest.js", "nest js"]
+    },
+    {
+      "id": "skill_python",
+      "label": "Python",
+      "category": "backend",
+      "aliases": ["python", "python3", "python 3", "py"]
+    },
+    {
+      "id": "skill_django",
+      "label": "Django",
+      "category": "backend",
+      "aliases": ["django", "django rest framework", "drf"]
+    },
+    {
+      "id": "skill_fastapi",
+      "label": "FastAPI",
+      "category": "backend",
+      "aliases": ["fastapi", "fast api"]
+    },
+    {
+      "id": "skill_golang",
+      "label": "Go",
+      "category": "backend",
+      "aliases": ["go", "golang", "go programming"]
+    },
+    {
+      "id": "skill_java",
+      "label": "Java",
+      "category": "backend",
+      "aliases": ["java", "java 17", "java 21", "core java"]
+    },
+    {
+      "id": "skill_spring_boot",
+      "label": "Spring Boot",
+      "category": "backend",
+      "aliases": ["spring boot", "springboot", "spring framework"]
+    },
+    {
+      "id": "skill_csharp",
+      "label": "C#",
+      "category": "backend",
+      "aliases": ["c#", "csharp", "c sharp", ".net", "dotnet", ".net core"]
+    },
+    {
+      "id": "skill_cpp",
+      "label": "C++",
+      "category": "systems",
+      "aliases": ["c++", "cpp", "cplusplus", "modern c++"]
+    },
+    {
+      "id": "skill_rust",
+      "label": "Rust",
+      "category": "systems",
+      "aliases": ["rust", "rust-lang", "rustlang"]
+    },
+    {
+      "id": "skill_mongodb",
+      "label": "MongoDB",
+      "category": "database",
+      "aliases": ["mongodb", "mongo", "mongoose", "documentdb"]
+    },
+    {
+      "id": "skill_postgresql",
+      "label": "PostgreSQL",
+      "category": "database",
+      "aliases": ["postgresql", "postgres", "psql"]
+    },
+    {
+      "id": "skill_mysql",
+      "label": "MySQL",
+      "category": "database",
+      "aliases": ["mysql", "mariadb"]
+    },
+    {
+      "id": "skill_redis",
+      "label": "Redis",
+      "category": "database",
+      "aliases": ["redis", "redis cache", "valkey"]
+    },
+    {
+      "id": "skill_elasticsearch",
+      "label": "Elasticsearch",
+      "category": "database",
+      "aliases": ["elasticsearch", "elastic search", "opensearch"]
+    },
+    {
+      "id": "skill_graphql",
+      "label": "GraphQL",
+      "category": "api",
+      "aliases": ["graphql", "apollo graphql", "relay"]
+    },
+    {
+      "id": "skill_rest_api",
+      "label": "REST API",
+      "category": "api",
+      "aliases": ["rest", "restful", "rest api", "rest apis", "restful apis"]
+    },
+    {
+      "id": "skill_grpc",
+      "label": "gRPC",
+      "category": "api",
+      "aliases": ["grpc", "protocol buffers", "protobuf"]
+    },
+    {
+      "id": "skill_webrtc",
+      "label": "WebRTC",
+      "category": "realtime",
+      "aliases": ["webrtc", "livekit", "mediasoup", "pion"]
+    },
+    {
+      "id": "skill_websockets",
+      "label": "WebSockets",
+      "category": "realtime",
+      "aliases": ["websocket", "websockets", "socket.io", "ws", "yjs", "crdt"]
+    },
+    {
+      "id": "skill_docker",
+      "label": "Docker",
+      "category": "devops",
+      "aliases": ["docker", "containerization", "containers", "dockerfile", "docker compose"]
+    },
+    {
+      "id": "skill_kubernetes",
+      "label": "Kubernetes",
+      "category": "devops",
+      "aliases": ["kubernetes", "k8s", "helm", "kubectl"]
+    },
+    {
+      "id": "skill_aws",
+      "label": "AWS",
+      "category": "cloud",
+      "aliases": ["aws", "amazon web services", "s3", "ec2", "lambda", "ecs", "eks", "sqs", "sns", "dynamodb"]
+    },
+    {
+      "id": "skill_gcp",
+      "label": "Google Cloud",
+      "category": "cloud",
+      "aliases": ["gcp", "google cloud", "google cloud platform", "cloud run", "gke", "bigquery"]
+    },
+    {
+      "id": "skill_azure",
+      "label": "Azure",
+      "category": "cloud",
+      "aliases": ["azure", "microsoft azure", "azure devops", "blob storage"]
+    },
+    {
+      "id": "skill_cicd",
+      "label": "CI/CD",
+      "category": "devops",
+      "aliases": ["ci/cd", "ci cd", "github actions", "gitlab ci", "jenkins", "circleci", "argo cd"]
+    },
+    {
+      "id": "skill_git",
+      "label": "Git",
+      "category": "tools",
+      "aliases": ["git", "github", "gitlab", "version control"]
+    },
+    {
+      "id": "skill_linux",
+      "label": "Linux",
+      "category": "systems",
+      "aliases": ["linux", "unix", "ubuntu", "debian", "rhel", "bash", "shell scripting"]
+    },
+    {
+      "id": "skill_microservices",
+      "label": "Microservices",
+      "category": "architecture",
+      "aliases": ["microservices", "microservice architecture", "distributed systems", "event-driven architecture", "event driven"]
+    },
+    {
+      "id": "skill_system_design",
+      "label": "System Design",
+      "category": "architecture",
+      "aliases": ["system design", "software architecture", "scalability", "high availability", "load balancing"]
+    },
+    {
+      "id": "skill_testing",
+      "label": "Testing & QA",
+      "category": "qa",
+      "aliases": ["jest", "vitest", "playwright", "cypress", "unit testing", "integration testing", "e2e testing", "tdd"]
+    },
+    {
+      "id": "skill_security",
+      "label": "Security",
+      "category": "security",
+      "aliases": ["oauth", "jwt", "owasp", "rbac", "encryption", "tls", "security best practices", "penetration testing"]
+    },
+    {
+      "id": "skill_ai_ml",
+      "label": "AI & Machine Learning",
+      "category": "ai",
+      "aliases": ["machine learning", "ml", "artificial intelligence", "ai", "deep learning", "nlp", "llm", "rag", "pytorch", "tensorflow", "openai", "gemini"]
+    }
+  ]
+}

@@ -12,6 +12,10 @@ const {
 const mongoose = require("mongoose");
 const aiService = require("../modules/ai/aiService");
 const { computeAtsScore } = require("../services/ai.service");
+const { defaultRRFEngine } = require("../modules/search/rrfEngine");
+
+const jobTextExtractor = (job) =>
+  `${job.title || ""} ${job.company || ""} ${job.description || ""} ${job.location || ""} ${(job.skills || []).join(" ")}`;
 
 /**
  * Recruiter creates a job
@@ -43,11 +47,57 @@ exports.createJob = async (req, res) => {
 };
 
 /**
- * Get ALL jobs (cached for non-recruiters, aggregated with application counts for recruiters)
+ * Search jobs using Reciprocal Rank Fusion (BM25 + Dense Vector Embeddings)
+ */
+exports.searchJobs = async (req, res) => {
+  try {
+    const query = String(req.query.q || req.query.search || "").trim();
+    const isRecruiter = req.user.role === "recruiter";
+    const filter = isRecruiter ? { recruiter: req.user._id } : {};
+
+    const jobs = await Job.find(filter).sort({ createdAt: -1 }).lean();
+
+    if (!query) {
+      return res.json(jobs);
+    }
+
+    const rrfResults = await defaultRRFEngine.search(jobs, jobTextExtractor, query, {
+      wBM25: 1.0,
+      wDense: 1.0,
+      k: 60,
+    });
+
+    const rankedJobs = rrfResults.map((r) => ({
+      ...r.item,
+      searchMetadata: {
+        rrfScore: r.rrfScore,
+        bm25Score: r.bm25Score,
+        vectorScore: r.vectorScore,
+        bm25Rank: r.bm25Rank,
+        vectorRank: r.vectorRank,
+        matchedTokens: r.matchedTokens,
+      },
+    }));
+
+    res.json(rankedJobs);
+  } catch (err) {
+    logger.error({ err: err.message }, "Failed to search jobs via RRF");
+    res.status(500).json({ msg: "Failed to perform hybrid search on jobs" });
+  }
+};
+
+/**
+ * Get ALL jobs (cached for non-recruiters, aggregated with application counts for recruiters, supports ?q= RRF search)
  */
 exports.getJobs = async (req, res) => {
   try {
     const isRecruiter = req.user.role === "recruiter";
+    const queryTerm = String(req.query.q || req.query.search || "").trim();
+
+    if (queryTerm) {
+      return exports.searchJobs(req, res);
+    }
+
     const cacheKey = isRecruiter ? `jobs:recruiter:${req.user._id}` : "jobs:public:all";
 
     if (!isRecruiter) {

@@ -11,6 +11,7 @@
     "@aws-sdk/client-s3": "^3.1111.0",
     "@aws-sdk/s3-request-presigner": "^3.1111.0",
     "@google/genai": "^2.10.0",
+    "@jobly/contracts": "file:../packages/contracts",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/auto-instrumentations-node": "^0.79.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
@@ -24,6 +25,7 @@
     "bcryptjs": "^2.4.3",
     "bullmq": "^6.1.1",
     "cors": "^2.8.5",
+    "csv-parse": "^7.0.2",
     "dotenv": "^16.6.1",
     "express": "^4.19.2",
     "express-mongo-sanitize": "^2.2.0",
@@ -53,6 +55,7 @@
     "jest": "^30.4.2",
     "mongodb-memory-server": "^11.2.0",
     "nodemon": "^3.1.11",
+    "socket.io-client": "^4.8.3",
     "supertest": "^7.2.2"
   }
 }

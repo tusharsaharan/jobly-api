@@ -88,9 +88,19 @@ exports.getDashboardInterviews = async (req, res) => {
 
     const enriched = sessions.map((s) => {
       const evaluation = evalMap.get(s._id.toString()) || null;
+      const isCompleted = s.status === "COMPLETED";
+      const isLiveOrScheduled = ["LIVE", "WAITING_ROOM", "SCHEDULED"].includes(s.status);
+
       return {
         ...s,
         evaluation: isRecruiter ? evaluation : toCandidateEvaluationSummary(evaluation),
+        capabilities: {
+          canEnterRoom: isLiveOrScheduled,
+          canReplay: isCompleted,
+          canViewReview: isRecruiter && isCompleted,
+          canViewFeedback: !isRecruiter && isCompleted && Boolean(evaluation),
+          canEvaluate: isRecruiter && isCompleted,
+        },
       };
     });
 

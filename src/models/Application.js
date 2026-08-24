@@ -26,6 +26,12 @@ const applicationSchema = new mongoose.Schema(
       default: "applied",
     },
     atsScore: { type: Number },
+    latestAtsAnalysis: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AtsAnalysis",
+      default: null,
+    },
+    atsVersion: { type: String, default: "v2" },
     atsBreakdown: {
       skillMatch: { type: Number },
       experienceRelevance: { type: Number },

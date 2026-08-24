@@ -2,6 +2,9 @@ const aiService = require("./aiService");
 const logger = require("../../config/logger");
 const TimelineEvent = require("../../models/TimelineEvent");
 const InterviewSession = require("../../models/InterviewSession");
+const { extractAllSignals } = require("../signals/signalExtractor");
+const { createEvidenceReference } = require("../signals/evidenceEngine");
+const { scoreInterviewSession } = require("../signals/rubricScorer");
 
 /**
  * AI Technical Interviewer Assistant & Evidence Engine
@@ -29,16 +32,16 @@ You are an expert AI Principal Engineer acting as a co-interviewer assistant for
 Analyze the candidate's current progress and stage to provide high-leverage, deep technical follow-up questions.
 
 Interview Details:
-- Job Role: ${session.job?.title || "Software Engineer"}
-- Current Stage: ${currentStage}
-- Active Language: ${activeLanguage}
-- Problem Statement: ${session.activeProblem?.title || "Technical Problem"}
+- Job Role: ${session?.job?.title || "Software Engineer"}
+- Current Stage: ${currentStage || "CODING"}
+- Active Language: ${activeLanguage || "javascript"}
+- Problem Statement: ${session?.activeProblem?.title || "Technical Problem"}
 
 Recent Transcript:
 ${transcriptHistory.slice(-5).map((t) => `${t.speaker}: ${t.text}`).join("\n") || "Candidate is currently working on the implementation."}
 
 Current Candidate Code:
-\`\`\`${activeLanguage}
+\`\`\`${activeLanguage || "javascript"}
 ${(activeCode || "").slice(0, 4000)}
 \`\`\`
 
@@ -86,73 +89,78 @@ Generate a JSON response with:
    * Generate post-interview evidence-backed evaluation scorecard
    */
   async generateEvaluation({ session, timelineEvents = [] }) {
-    const prompt = `
-You are an expert Bar Raiser evaluating a completed technical interview.
-Synthesize the entire interview timeline, code executions, and transcript into a structured evaluation with concrete evidence items.
+    const sessionId = String(session?._id || "session-default");
+    const candidateId = String(session?.seeker?._id || session?.seeker || "candidate-default");
+    const interviewerId = String(session?.recruiter?._id || session?.recruiter || "recruiter-default");
 
-Interview Summary:
-- Candidate: ${session.seeker?.name || "Candidate"}
-- Role: ${session.job?.title || "Software Engineer"}
-- Total Timeline Events: ${timelineEvents.length}
+    // Extract real multi-modal signals from timeline
+    const codeEvents = timelineEvents.filter((e) => e.pipeline === "CODING");
+    const execEvents = timelineEvents.filter((e) => e.eventType?.startsWith("execution.") || e.eventType === "code.run" || e.eventType === "code.test");
+    const transcriptEvents = timelineEvents.filter((e) => e.pipeline === "COMMUNICATION" || e.eventType === "transcript.segment");
+    const whiteboardEvents = timelineEvents.filter((e) => e.pipeline === "WHITEBOARD");
+    const focusEvents = timelineEvents.filter((e) => e.pipeline === "SYSTEM" && e.eventType?.startsWith("focus."));
 
-Timeline Highlights:
-${timelineEvents
-  .slice(0, 30)
-  .map((e) => `[${Math.floor(e.offsetMs / 1000)}s - ${e.pipeline}] ${e.eventType}: ${JSON.stringify(e.payload)}`)
-  .join("\n")}
+    const latestCode = codeEvents[codeEvents.length - 1]?.payload?.code || "";
+    const lastExec = execEvents[execEvents.length - 1]?.payload || {};
 
-Generate a structured evaluation JSON:
-- "recommendedDecision": "STRONG_HIRE" | "HIRE" | "LEAN_HIRE" | "LEAN_REJECT" | "REJECT"
-- "confidenceScore": number between 0.70 and 0.99
-- "strengths": Array of 2-4 concrete technical strengths demonstrated
-- "growthAreas": Array of 1-3 areas for improvement
-- "categories": Array of evaluated categories ("Coding & Algorithms", "System Architecture & Scalability", "Problem Solving & Decomposition", "Communication & Technical Clarity") each with a score (1-5) and specific evidence timestamp references.
-`;
+    const signals = extractAllSignals({
+      sessionId,
+      code: latestCode,
+      language: session?.config?.language || "javascript",
+      executionResult: lastExec,
+      testCaseResults: lastExec?.results || [],
+      transcriptSegments: transcriptEvents.map((t) => ({
+        text: t.payload?.text || "",
+        participantId: t.participant,
+        participantRole: t.participantRole,
+      })),
+      candidateId,
+      whiteboardData: whiteboardEvents[whiteboardEvents.length - 1]?.payload || {},
+      focusEvents,
+    });
 
-    try {
-      const result = await aiService.executeWithCascade(prompt, {
-        safeParse: (data) => ({
-          success: Boolean(data && typeof data === "object"),
-          data: {
-            recommendedDecision: data.recommendedDecision || "HIRE",
-            confidenceScore: data.confidenceScore || 0.88,
-            strengths: data.strengths || ["Clean algorithmic implementation", "Clear technical communication"],
-            growthAreas: data.growthAreas || ["Deep-dive into boundary condition edge cases"],
-            categories: data.categories || [
-              { category: "Coding & Algorithms", score: 4, notes: "Efficient data structure utilization." },
-              { category: "Problem Solving & Decomposition", score: 4, notes: "Systematic step-by-step reasoning." },
-            ],
+    // Create evidence references from top events
+    const evidenceReferences = [];
+    for (const ev of timelineEvents.slice(0, 15)) {
+      try {
+        const ref = createEvidenceReference({
+          type: ev.pipeline === "CODING" ? "CODE_CHECKPOINT" : ev.pipeline === "COMMUNICATION" ? "TRANSCRIPT" : ev.pipeline === "WHITEBOARD" ? "WHITEBOARD_SNAPSHOT" : "TIMELINE_EVENT",
+          timelineEventId: ev._id || `ev-auto-${ev.offsetMs}`,
+          offsetMs: ev.offsetMs || 0,
+          locator: {
+            file: ev.payload?.file || undefined,
+            quote: ev.payload?.text || undefined,
+            speaker: ev.participantRole || "Candidate",
           },
-        }),
-        parse: () => ({
-          recommendedDecision: "HIRE",
-          confidenceScore: 0.85,
-          strengths: ["Solid fundamentals", "Good problem decomposition"],
-          growthAreas: ["Consider distributed concurrency edge cases"],
-          categories: [
-            { category: "Coding & Algorithms", score: 4, notes: "Solid algorithmic reasoning." },
-          ],
-        }),
-      });
-
-      return result.data;
-    } catch (err) {
-      logger.error({ err: err.message }, "Error generating AI interview evaluation");
-      return {
-        recommendedDecision: "LEAN_HIRE",
-        confidenceScore: 0.8,
-        strengths: ["Candidate completed the core problem requirements."],
-        growthAreas: ["Review complexity tradeoffs under high concurrency."],
-        categories: [
-          { category: "Coding & Algorithms", score: 3, notes: "Standard solution implemented." },
-        ],
-      };
+          summary: `${ev.pipeline} event: ${ev.eventType}`,
+        });
+        evidenceReferences.push(ref);
+      } catch (e) {
+        // Skip invalid synthetic events
+      }
     }
+
+    // Run deterministic rubric scoring
+    const deterministicEvaluation = scoreInterviewSession({
+      signals,
+      evidenceReferences,
+      sessionId,
+      candidateId,
+      interviewerId,
+    });
+
+    return deterministicEvaluation;
   }
 }
 
 function buildEvidenceGroundedFollowUp(code, language) {
-  const normalized = code.toLowerCase();
+  // Do not treat a problem description, comment, or string literal as proof
+  // that the candidate used a data structure.
+  const executableCode = String(code)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "")
+    .replace(/#.*$/gm, "")
+    .replace(/(['"]).*?\1/g, "");
   if (!code.trim()) {
     return {
       observation: "No executable code is currently present in the shared workspace.",
@@ -161,7 +169,7 @@ function buildEvidenceGroundedFollowUp(code, language) {
       difficultyLevel: "Medium",
     };
   }
-  if (/unordered_map|hashmap|\bmap\s*<|\bdict\b|\bmap\(/i.test(code)) {
+  if (/\bstd::unordered_map\s*<|\bunordered_map\s*<|\bHashMap\s*(?:<|\()|\b(?:collections\.)?defaultdict\s*\(|\{\s*[^{}]+\s*:\s*[^{}]+\}/i.test(executableCode)) {
     return {
       observation: "The shared code contains a map or dictionary lookup.",
       suggestedQuestion: "What are the expected time and space costs of these lookups, and which input pattern could make them degrade?",

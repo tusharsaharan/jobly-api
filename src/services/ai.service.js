@@ -383,3 +383,98 @@ function extractRole(text) {
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+exports.generateFocusQuiz = async (topic, userProfile, { difficulty = "Medium", count = 5 } = {}) => {
+  try {
+    const questionCount = Math.max(3, Math.min(15, count || 5));
+    if (!process.env.GEMINI_API_KEY) {
+      return [
+        {
+          question: `What is the core concept behind ${topic}?`,
+          options: ["Speed", "Reliability", "Abstraction", "Complexity"],
+          correctAnswer: 2,
+          explanation: "Abstraction simplifies complex systems."
+        }
+      ];
+    }
+
+    const prompt = `
+You are an expert technical interviewer and computer science educator.
+Generate a ${questionCount}-question multiple-choice quiz on the topic of "${topic}".
+Difficulty level: ${difficulty} (Easy = fundamental concepts & syntax, Medium = practical application & trade-offs, Hard = edge cases, internals & tricky scenarios).
+${userProfile ? `Consider the user's background: ${JSON.stringify(userProfile)}` : ""}
+
+Return strictly as a JSON array of objects. Each object must follow this exact schema:
+[
+  {
+    "question": "The question text",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correctAnswer": 0, // Integer index (0-3) of the correct option in the options array
+    "explanation": "Short technical explanation of why this answer is correct."
+  }
+]
+`;
+
+    const response = await getAI().models.generateContent({
+      model: "gemini-flash-lite-latest",
+      contents: prompt,
+      config: { responseMimeType: "application/json" },
+    });
+
+    let text = response.text;
+    if (text.startsWith("```")) {
+      text = text.replace(/^```(json)?\n/, "").replace(/\n```$/, "");
+    }
+
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("AI Quiz Gen Error:", error?.status, error?.message);
+    throw new Error("Failed to generate quiz");
+  }
+};
+
+exports.generateCPProblem = async (topic, { difficulty = "Medium" } = {}) => {
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      return {
+        problemStatement: `Write a function that reverses a string related to ${topic}.`,
+        initialCode: `function solve(input) {\n  // your code here\n}`,
+        testCases: [
+          { input: '"hello"', expectedOutput: '"olleh"' },
+          { input: '"jobly"', expectedOutput: '"ylboj"' }
+        ]
+      };
+    }
+
+    const prompt = `
+You are an expert competitive programming platform. Create an algorithmic coding problem around the topic of "${topic}".
+Target Difficulty: ${difficulty} (Easy / Medium / Hard).
+Return strictly as a JSON object following this schema:
+{
+  "problemStatement": "Markdown string describing the problem, constraints, input format, and output format.",
+  "initialCode": "JavaScript boilerplate string (e.g., 'function solve(input) {\\n\\n}')",
+  "testCases": [
+    { "input": "string representing argument 1", "expectedOutput": "string representing expected return" }
+  ]
+}
+Provide exactly 3 solid, edge-case test cases.
+`;
+
+    const response = await getAI().models.generateContent({
+      model: "gemini-flash-lite-latest",
+      contents: prompt,
+      config: { responseMimeType: "application/json" },
+    });
+
+    let text = response.text;
+    if (text.startsWith("```")) {
+      text = text.replace(/^```(json)?\n/, "").replace(/\n```$/, "");
+    }
+
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("AI CP Gen Error:", error?.status, error?.message);
+    throw new Error("Failed to generate CP problem");
+  }
+};
+

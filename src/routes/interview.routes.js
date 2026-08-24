@@ -24,11 +24,16 @@ router.post(
 // List all interview sessions for current user (Seeker sees theirs, Recruiter sees theirs)
 router.get("/", interviewController.getMyInterviews);
 
-// Get specific interview session details and timeline
-router.get("/:sessionId", interviewController.getInterviewSession);
-
-// Get session details and room token by room key
+// Static routes (must precede /:sessionId parameter routes)
 router.get("/room/:roomKey", interviewController.getInterviewByRoomKey);
+router.post("/config/parse", interviewController.parseConfig);
+router.post("/config/format", interviewController.formatConfig);
+router.get("/invites/validate/:token", interviewController.validateInterviewInvite);
+router.post("/invites/accept/:token", interviewController.acceptInterviewInvite);
+
+// Parameterized interview session endpoints
+router.get("/:sessionId", interviewController.getInterviewSession);
+router.post("/:sessionId/invites", roleMiddleware("recruiter"), interviewController.createInterviewInvite);
 
 // Execute candidate code in sandbox
 router.post(
@@ -54,8 +59,10 @@ router.patch(
 // WebRTC LiveKit signed access token
 router.post("/:sessionId/livekit-token", interviewController.getLiveKitToken);
 
-// Config DSL parsing & pretty-printing
-router.post("/config/parse", interviewController.parseConfig);
-router.post("/config/format", interviewController.formatConfig);
+// Video / Audio recording storage
+const videoUpload = require("../middleware/videoUpload.middleware");
+router.post("/:sessionId/recording", videoUpload.single("video"), interviewController.uploadInterviewRecording);
+router.get("/:sessionId/recording", interviewController.getInterviewRecording);
 
 module.exports = router;
+

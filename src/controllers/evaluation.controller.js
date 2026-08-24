@@ -165,6 +165,19 @@ exports.createEvaluation = async (req, res) => {
       await session.save();
     }
 
+    // Asynchronously extract candidate weaknesses into CandidateTopicWeakness
+    const candidateId = session.seeker;
+    if (candidateId && weaknesses && weaknesses.length > 0) {
+      const topicExtractionService = require("../services/topicExtraction.service");
+      topicExtractionService.processCandidateFeedback({
+        candidateId,
+        sourceType: "evaluation",
+        sourceId: evaluation._id,
+        sourceSessionId: session._id,
+        feedback: weaknesses
+      }).catch(err => logger.warn({ err: err.message }, "Async topic extraction failed"));
+    }
+
     return res.status(201).json({
       msg: "Evaluation saved successfully with verified evidence.",
       evaluation,

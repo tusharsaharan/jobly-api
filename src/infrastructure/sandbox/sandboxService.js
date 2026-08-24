@@ -51,6 +51,29 @@ const RUNTIMES = {
     timeoutMs: 10000,
     memoryLimitMb: 512,
   },
+  go: {
+    extension: "go",
+    command: "go",
+    getArgs: (filepath) => ["run", filepath],
+    timeoutMs: 12000,
+    memoryLimitMb: 512,
+  },
+  ruby: {
+    extension: "rb",
+    command: "ruby",
+    getArgs: (filepath) => [filepath],
+    timeoutMs: 8000,
+    memoryLimitMb: 256,
+  },
+  rust: {
+    extension: "rs",
+    isCompiled: true,
+    compileCmd: "rustc",
+    getCompileArgs: (src, bin) => [src, "-O", "-o", bin],
+    command: (bin) => bin,
+    timeoutMs: 12000,
+    memoryLimitMb: 512,
+  },
 };
 
 function runProcess({ command, args, cwd, stdin, timeoutMs }) {
@@ -168,7 +191,8 @@ async function executeCodeSandbox({ language, code, stdin = "", timeoutMs }) {
     fs.writeFileSync(sourceFilePath, code, "utf8");
 
     if (runtime.isCompiled) {
-      const binaryPath = path.join(tempDir, "solution-bin");
+      const isWin = os.platform() === "win32";
+      const binaryPath = path.join(tempDir, isWin && runtime.extension === "cpp" ? "solution-bin.exe" : "solution-bin");
       const compileResult = await runProcess({
         command: runtime.compileCmd,
         args: runtime.getCompileArgs(sourceFilePath, binaryPath),
@@ -182,6 +206,7 @@ async function executeCodeSandbox({ language, code, stdin = "", timeoutMs }) {
           phase: "compile",
           failureKind: classifyFailure(compileResult, "compile"),
           compilerOutput: compileResult.stderr,
+          stderr: compileResult.stderr || "Compilation failed.",
         };
       }
 
@@ -260,8 +285,17 @@ async function runTestCases({ language, code, testCases = [] }) {
   };
 }
 
+const {
+  SECCOMP_BPF_PROFILE,
+  CGROUPS_V2_CONFIG,
+  generateContainerSecurityArgs,
+} = require("./sandboxSecurityProfile");
+
 module.exports = {
   executeCodeSandbox,
   runTestCases,
   RUNTIMES,
+  SECCOMP_BPF_PROFILE,
+  CGROUPS_V2_CONFIG,
+  generateContainerSecurityArgs,
 };

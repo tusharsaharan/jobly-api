@@ -28,13 +28,20 @@ const ROOM_GC_DELAY_MS = 30 * 60 * 1000; // 30 minutes
  */
 async function loadPersistedState(doc, sessionIdentifier, field) {
   try {
-    const session = await InterviewSession.findOne({
-      $or: [{ roomKey: sessionIdentifier }, { _id: sessionIdentifier }],
-    }).select(field).lean();
+    const isObjId = /^[0-9a-fA-F]{24}$/.test(String(sessionIdentifier));
+    const session = await InterviewSession.findOne(
+      isObjId
+        ? { $or: [{ roomKey: sessionIdentifier }, { _id: sessionIdentifier }] }
+        : { roomKey: sessionIdentifier }
+    ).select(field).lean();
 
-    if (session && session[field]) {
-      Y.applyUpdate(doc, new Uint8Array(session[field]));
-      logger.debug({ sessionIdentifier, field }, "Loaded persisted Yjs state from MongoDB");
+    if (session && session[field] && session[field].length > 2) {
+      try {
+        Y.applyUpdate(doc, new Uint8Array(session[field]));
+        logger.debug({ sessionIdentifier, field }, "Loaded persisted Yjs state from MongoDB");
+      } catch (applyErr) {
+        logger.warn({ sessionIdentifier, field, err: applyErr.message }, "Skipping unparseable persisted Yjs state buffer");
+      }
     }
   } catch (err) {
     logger.warn({ err: err.message, sessionIdentifier }, "Could not load persisted Yjs state");

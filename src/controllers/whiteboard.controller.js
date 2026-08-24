@@ -3,6 +3,7 @@ const InterviewSession = require("../models/InterviewSession");
 const WhiteboardSnapshot = require("../models/WhiteboardSnapshot");
 const TimelineEvent = require("../models/TimelineEvent");
 const { getOrCreateWhiteboardDoc, persistRoomDocNow } = require("../infrastructure/realtime/yjsCoordinator");
+const { sessionOffsetMs } = require("../services/interviewClock");
 
 /**
  * Authorize participant
@@ -73,21 +74,20 @@ exports.createSnapshot = async (req, res) => {
 
     const sequenceNumber = (lastSnapshot?.sequenceNumber || 0) + 1;
 
+    const offsetMs = sessionOffsetMs(session);
+
     const snapshot = await WhiteboardSnapshot.create({
       session: session._id,
       objects,
       boardType,
       canvasWidth,
       canvasHeight,
+      offsetMs,
       sequenceNumber,
       previewImageUrl: previewImageUrl || null,
     });
 
-    const offsetMs = session.actualStart
-      ? Math.max(0, Date.now() - new Date(session.actualStart).getTime())
-      : 0;
-
-    await TimelineEvent.create({
+    const timelineEv = await TimelineEvent.create({
       session: session._id,
       pipeline: "WHITEBOARD",
       eventType: "whiteboard.snapshot",
@@ -102,9 +102,22 @@ exports.createSnapshot = async (req, res) => {
 
     await persistRoomDocNow(session.roomKey, doc, "yjsWhiteboardState");
 
+    try {
+      const { getIO } = require("../infrastructure/realtime/socketio");
+      const io = getIO();
+      if (io && session.roomKey) {
+        io.to(`interview:${session.roomKey}`).emit("timeline_event_received", timelineEv);
+        io.to(`interview:${session.roomKey}`).emit("whiteboard_snapshot_saved", {
+          snapshot,
+          timelineEvent: timelineEv,
+        });
+      }
+    } catch {}
+
     return res.status(201).json({
       msg: "Whiteboard snapshot created successfully",
       snapshot,
+      timelineEvent: timelineEv,
     });
   } catch (err) {
     logger.error({ err: err.message }, "Error creating whiteboard snapshot");

@@ -36,6 +36,13 @@ const codeCheckpointSchema = new mongoose.Schema(
       type: Buffer,
       default: null,
     },
+    offsetMs: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+      index: true,
+    },
     sequenceNumber: {
       type: Number,
       required: true,
@@ -44,6 +51,7 @@ const codeCheckpointSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+codeCheckpointSchema.index({ session: 1, offsetMs: 1, sequenceNumber: 1 });
 codeCheckpointSchema.index({ session: 1, sequenceNumber: 1 });
 codeCheckpointSchema.index({ session: 1, createdAt: 1 });
 

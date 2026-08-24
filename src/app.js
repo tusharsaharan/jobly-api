@@ -22,6 +22,13 @@ const evaluationRoutes = require("./routes/evaluation.routes");
 const replayRoutes = require("./routes/replay.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
 const healthRoutes = require("./routes/health.routes");
+const interviewNoteRoutes = require("./routes/interviewNote.routes");
+const atsRoutes = require("./routes/ats.routes");
+const signalsRoutes = require("./routes/signals.routes");
+const integrityRoutes = require("./routes/integrity.routes");
+const learnRoutes = require("./routes/learn.routes");
+const competitionRoutes = require("./routes/competition.routes");
+const studyRoutes = require("./routes/study.routes");
 
 const app = express();
 
@@ -86,12 +93,23 @@ app.use("/api/resume", resumeRoutes);
 app.use("/api/applications", applicationRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/interviews", interviewRoutes);
+app.use("/api/interviews/:sessionId/notes", interviewNoteRoutes);
 app.use("/api/coding", codingRoutes);
 app.use("/api/whiteboard", whiteboardRoutes);
 app.use("/api/timeline", timelineRoutes);
 app.use("/api/evaluations", evaluationRoutes);
 app.use("/api/replay", replayRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/ats", atsRoutes);
+app.use("/api/signals", signalsRoutes);
+app.use("/api/integrity", integrityRoutes);
+app.use("/api/learn", learnRoutes);
+app.use("/api/compete", competitionRoutes);
+app.use("/api/study", studyRoutes);
+
+// Static uploads serving (Video recordings, resumes, assets)
+const path = require("path");
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Global Error Handler
 app.use((err, req, res, next) => {

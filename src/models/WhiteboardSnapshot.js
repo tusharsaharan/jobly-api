@@ -25,6 +25,13 @@ const whiteboardSnapshotSchema = new mongoose.Schema(
       type: Number,
       default: 1080,
     },
+    offsetMs: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+      index: true,
+    },
     sequenceNumber: {
       type: Number,
       required: true,
@@ -37,6 +44,7 @@ const whiteboardSnapshotSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+whiteboardSnapshotSchema.index({ session: 1, offsetMs: 1, sequenceNumber: 1 });
 whiteboardSnapshotSchema.index({ session: 1, sequenceNumber: 1 });
 
 module.exports = mongoose.model("WhiteboardSnapshot", whiteboardSnapshotSchema);

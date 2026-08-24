@@ -4,6 +4,9 @@ const { uploadFileBuffer } = require("../config/s3");
 const sseManager = require("../infrastructure/events/sse.manager");
 const logger = require("../config/logger");
 const { processResumeJob } = require("../workers/resume.processor");
+const ResumeUpload = require("../models/ResumeUpload");
+const User = require("../models/User");
+const { scoreResumeHealth } = require("../modules/ats");
 
 /**
  * Validate PDF Magic Bytes (%PDF in first 4 bytes)
@@ -29,6 +32,21 @@ exports.uploadResume = async (req, res) => {
       return res.status(400).json({ msg: "Uploaded file is not a valid PDF document." });
     }
 
+    const uploadId = `upl-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+    const sha256 = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+
+    // Create durable ResumeUpload state record
+    await ResumeUpload.create({
+      uploadId,
+      userId: req.user._id,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      sha256,
+      state: "scanning",
+      progress: 15,
+      messageCode: "upload_received",
+    });
+
     const s3Key = `resumes/${req.user._id}/${crypto.randomUUID()}-${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
 
     // Upload to S3/MinIO in background if available
@@ -43,19 +61,21 @@ exports.uploadResume = async (req, res) => {
     }
 
     const jobData = {
+      uploadId,
       userId: req.user._id.toString(),
       originalName: req.file.originalname,
       s3Key: uploadedToS3 ? s3Key : null,
       fileBuffer: uploadedToS3 ? null : req.file.buffer.toString("base64"),
     };
 
-    // If running in test or local standalone fallback mode without worker daemon
     const result = await processResumeJob(jobData);
     if (!result.success) {
-      return res.status(400).json({ msg: result.error || "Resume parsing failed" });
+      return res.status(400).json({ msg: result.error || "Resume parsing failed", uploadId });
     }
+
     return res.json({
       msg: "Resume uploaded successfully",
+      uploadId,
       skills: result.user.skills,
       summary: result.user.resumeSummary,
       education: {
@@ -66,11 +86,86 @@ exports.uploadResume = async (req, res) => {
       },
       achievements: result.user.achievements,
       experience: result.user.experience,
+      resumeProfile: result.resumeProfile || result.user.resumeProfile,
+      resumeHealth: result.healthResult || result.user.resumeHealth,
       user: result.user,
     });
   } catch (err) {
     logger.error({ err: err.message }, "Resume upload controller error");
     res.status(500).json({ msg: "Resume parsing failed" });
+  }
+};
+
+/**
+ * Get durable upload status
+ */
+exports.getUploadStatus = async (req, res) => {
+  try {
+    const { uploadId } = req.params;
+    const uploadRecord = await ResumeUpload.findOne({ uploadId, userId: req.user._id });
+    if (!uploadRecord) {
+      return res.status(404).json({ msg: "Upload record not found" });
+    }
+    return res.json(uploadRecord);
+  } catch (err) {
+    logger.error({ err: err.message }, "getUploadStatus error");
+    res.status(500).json({ msg: "Failed to fetch upload status" });
+  }
+};
+
+/**
+ * Get current candidate's canonical ResumeProfile and Health analysis
+ */
+exports.getResumeProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).lean();
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
+    }
+    return res.json({
+      resumeProfile: user.resumeProfile || null,
+      resumeHealth: user.resumeHealth || null,
+      skills: user.skills || [],
+      summary: user.resumeSummary || "",
+      experience: user.experience || [],
+      achievements: user.achievements || [],
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, "getResumeProfile error");
+    res.status(500).json({ msg: "Failed to fetch resume profile" });
+  }
+};
+
+/**
+ * Update candidate's canonical ResumeProfile and re-evaluate health score
+ */
+exports.updateResumeProfile = async (req, res) => {
+  try {
+    const { resumeProfile } = req.body;
+    if (!resumeProfile) {
+      return res.status(400).json({ msg: "resumeProfile payload required" });
+    }
+
+    const healthResult = scoreResumeHealth(resumeProfile);
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        resumeProfile,
+        resumeHealth: healthResult,
+        skills: (resumeProfile.skills || []).map((s) => s.label || s.canonicalId),
+        resumeSummary: resumeProfile.summary || "",
+      },
+      { new: true }
+    );
+
+    return res.json({
+      msg: "Resume profile updated successfully",
+      resumeProfile: user.resumeProfile,
+      resumeHealth: user.resumeHealth,
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, "updateResumeProfile error");
+    res.status(500).json({ msg: "Failed to update resume profile" });
   }
 };
 
@@ -81,7 +176,7 @@ exports.streamResumeEvents = (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no"); // Disable proxy buffering (Nginx)
+  res.setHeader("X-Accel-Buffering", "no");
 
   sseManager.addClient(req.user._id, res);
   res.write(`event: connected\ndata: ${JSON.stringify({ msg: "SSE connection established" })}\n\n`);
@@ -99,8 +194,9 @@ exports.getJobStatus = async (req, res) => {
     }
     const state = await job.getState();
     const progress = job.progress;
-    res.json({ id: job.id, state, progress, returnvalue: job.returnvalue });
+    return res.json({ jobId, state, progress });
   } catch (err) {
-    res.status(500).json({ msg: "Failed fetching job status" });
+    logger.error({ err: err.message }, "getJobStatus error");
+    res.status(500).json({ msg: "Failed to fetch job status" });
   }
 };

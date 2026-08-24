@@ -7,6 +7,7 @@ const InterviewProblem = require("../models/InterviewProblem");
 const Application = require("../models/Application");
 const TimelineEvent = require("../models/TimelineEvent");
 const InterviewScorecard = require("../models/InterviewScorecard");
+const InterviewInvite = require("../models/InterviewInvite");
 
 /**
  * Helper to generate secure, time-limited room token with participant role & permissions
@@ -224,11 +225,16 @@ exports.getInterviewByRoomKey = async (req, res) => {
 
     const { token: roomToken, role, permissions } = generateRoomToken(session, req.user);
 
+    const timelineEvents = await TimelineEvent.find({ session: session._id })
+      .sort({ offsetMs: 1, createdAt: 1 })
+      .lean();
+
     return res.json({
       session,
       roomToken,
       role,
       permissions,
+      timelineEvents: timelineEvents || [],
     });
   } catch (err) {
     logger.error({ err: err.message }, "Error joining interview room by key");
@@ -268,7 +274,7 @@ exports.executeCodeInSession = async (req, res) => {
       : 0;
 
     // Record execution into the unified timeline
-    await TimelineEvent.create({
+    const timelineEvent = await TimelineEvent.create({
       session: session._id,
       pipeline: "CODING",
       eventType: "code.execution",
@@ -276,6 +282,7 @@ exports.executeCodeInSession = async (req, res) => {
       participant: req.user._id,
       participantRole: req.user.role || "seeker",
       payload: {
+        text: `Executed ${language} (Exit ${execution.exitCode})`,
         executionId: execution.executionId,
         language,
         exitCode: execution.exitCode,
@@ -292,6 +299,19 @@ exports.executeCodeInSession = async (req, res) => {
 
     const checkpointService = require("../services/checkpointService");
     checkpointService.createCheckpoint(session, "EXECUTION", `After ${language} code execution (exit ${execution.exitCode})`).catch(() => {});
+
+    // Broadcast execution and timeline event to peers in the interview room
+    const { getIO } = require("../infrastructure/realtime/socketio");
+    const io = getIO();
+    if (io && session.roomKey) {
+      io.to(`interview:${session.roomKey}`).emit("code_execution_received", {
+        execution,
+        language,
+        senderId: req.user._id,
+        offsetMs: calculatedOffset,
+      });
+      io.to(`interview:${session.roomKey}`).emit("timeline_event_received", timelineEvent);
+    }
 
     return res.json({
       msg: "Execution completed",
@@ -421,6 +441,17 @@ exports.evaluateInterview = async (req, res) => {
       await session.save();
     }
 
+    // Broadcast session status completion over Socket.IO
+    const { getIO } = require("../infrastructure/realtime/socketio");
+    const io = getIO();
+    if (io && session.roomKey) {
+      io.to(`interview:${session.roomKey}`).emit("session_status_changed", {
+        status: "COMPLETED",
+        stage: "COMPLETED",
+        actualEnd: session.actualEnd,
+      });
+    }
+
     logger.info({ sessionId, decision: scorecard.hiringDecision }, "Interview evaluated and saved");
 
     return res.json({
@@ -478,6 +509,18 @@ exports.updateInterviewStage = async (req, res) => {
     const checkpointService = require("../services/checkpointService");
     checkpointService.createCheckpoint(session, "STAGE_TRANSITION", `Transitioned to stage: ${stage}`).catch(() => {});
 
+    // Broadcast stage transition to all room participants in real time
+    const { getIO } = require("../infrastructure/realtime/socketio");
+    const io = getIO();
+    if (io && session.roomKey) {
+      io.to(`interview:${session.roomKey}`).emit("stage_updated", {
+        stage,
+        status: session.status,
+        actualStart: session.actualStart,
+        offsetMs: calculatedOffset,
+      });
+    }
+
     logger.info({ sessionId, stage, status: session.status }, "Interview stage updated");
 
     return res.json({
@@ -517,6 +560,24 @@ exports.getMyInterviews = async (req, res) => {
 
 const livekitService = require("../infrastructure/webrtc/livekitService");
 
+function getPublicLiveKitUrl(req) {
+  if (process.env.LIVEKIT_PUBLIC_URL) return process.env.LIVEKIT_PUBLIC_URL;
+  if (process.env.LIVEKIT_URL && !/\b(livekit|localhost|127\.0\.0\.1)\b/i.test(process.env.LIVEKIT_URL)) {
+    return process.env.LIVEKIT_URL;
+  }
+
+  // Never send a hosted browser to its own localhost. When a public URL has
+  // not been supplied, make a useful same-host fallback for plain Compose.
+  const forwardedHost = req.get("x-forwarded-host");
+  const host = (forwardedHost || req.get("host") || "").split(",")[0].trim();
+  if (host && !/^localhost(?::|$)|^127\.0\.0\.1(?::|$)/i.test(host)) {
+    const hostname = host.replace(/:\d+$/, "");
+    const protocol = (req.get("x-forwarded-proto") || req.protocol) === "https" ? "wss" : "ws";
+    return `${protocol}://${hostname}:7880`;
+  }
+  return "ws://localhost:7880";
+}
+
 /**
  * Generate signed LiveKit WebRTC token for audio/video communication
  * POST /api/interviews/:sessionId/livekit-token
@@ -550,7 +611,7 @@ exports.getLiveKitToken = async (req, res) => {
 
     // This URL is consumed by the browser, so it must be a public/browser-reachable
     // WebSocket URL rather than the Docker-internal `livekit` hostname.
-    const serverUrl = process.env.LIVEKIT_PUBLIC_URL || process.env.LIVEKIT_URL || "ws://localhost:7880";
+    const serverUrl = getPublicLiveKitUrl(req);
     if (!/^wss?:\/\//.test(serverUrl)) {
       return res.status(503).json({
         msg: "Live call is misconfigured. LIVEKIT_PUBLIC_URL must start with ws:// or wss://.",
@@ -603,3 +664,205 @@ exports.formatConfig = async (req, res) => {
     return res.status(400).json({ msg: err.message });
   }
 };
+
+/**
+ * POST /api/interviews/:sessionId/invites
+ * Lead recruiter creates or rotates an authenticated invitation for an assigned participant
+ */
+exports.createInterviewInvite = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { audienceUserId, purpose = "CANDIDATE_INVITE", expiresInHours = 72 } = req.body;
+
+    const session = await InterviewSession.findById(sessionId).populate("seeker recruiter");
+    if (!session) {
+      return res.status(404).json({ msg: "Interview session not found" });
+    }
+
+    if (String(session.recruiter._id || session.recruiter) !== String(req.user._id)) {
+      return res.status(403).json({ msg: "Only the lead recruiter can generate invites" });
+    }
+
+    const targetUser = audienceUserId || session.seeker._id;
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+
+    // Revoke previous active invites for the same audienceUser
+    await InterviewInvite.updateMany(
+      { session: session._id, audienceUser: targetUser, usedAt: null, revokedAt: null },
+      { $set: { revokedAt: new Date() } }
+    );
+
+    const invite = await InterviewInvite.create({
+      session: session._id,
+      audienceUser: targetUser,
+      audienceEmailNormalized: session.seeker?.email ? session.seeker.email.toLowerCase() : undefined,
+      tokenHash,
+      purpose,
+      expiresAt,
+      createdBy: req.user._id,
+    });
+
+    return res.status(201).json({
+      msg: "Invite created successfully",
+      rawToken,
+      inviteUrl: `/join/interview/${rawToken}`,
+      expiresAt: invite.expiresAt,
+      purpose: invite.purpose,
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, "Error creating interview invite");
+    return res.status(500).json({ msg: "Failed creating interview invite" });
+  }
+};
+
+/**
+ * GET /api/interviews/invites/validate/:token
+ * Check validity of an invite token before login/exchange
+ */
+exports.validateInterviewInvite = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    const invite = await InterviewInvite.findOne({
+      tokenHash,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    }).populate("session audienceUser", "title scheduledStart roomKey name email");
+
+    if (!invite || !invite.session) {
+      return res.status(404).json({ msg: "Invitation is invalid, expired, or revoked." });
+    }
+
+    invite.lastOpenedAt = new Date();
+    await invite.save();
+
+    return res.json({
+      valid: true,
+      purpose: invite.purpose,
+      session: {
+        title: invite.session.title,
+        scheduledStart: invite.session.scheduledStart,
+      },
+      assignedUser: {
+        name: invite.audienceUser?.name,
+      },
+      expiresAt: invite.expiresAt,
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, "Error validating interview invite");
+    return res.status(500).json({ msg: "Failed validating invite" });
+  }
+};
+
+/**
+ * POST /api/interviews/invites/accept/:token
+ * Authenticated exchange: ensures req.user matches audienceUser
+ */
+exports.acceptInterviewInvite = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    const invite = await InterviewInvite.findOne({
+      tokenHash,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    }).populate("session");
+
+    if (!invite || !invite.session) {
+      return res.status(404).json({ msg: "Invitation is invalid, expired, or revoked." });
+    }
+
+    if (String(invite.audienceUser) !== String(req.user._id)) {
+      return res.status(403).json({
+        msg: "This invitation is assigned to a different user account. Please log in with the correct account.",
+      });
+    }
+
+    invite.usedAt = new Date();
+    await invite.save();
+
+    return res.json({
+      msg: "Invitation verified successfully",
+      roomKey: invite.session.roomKey,
+      sessionId: invite.session._id,
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, "Error accepting interview invite");
+    return res.status(500).json({ msg: "Failed accepting invite" });
+  }
+};
+
+/**
+ * POST /api/interviews/:sessionId/recording
+ * Upload recorded interview video/audio file from client session
+ */
+exports.uploadInterviewRecording = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await InterviewSession.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ msg: "Interview session not found" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ msg: "No video media file provided" });
+    }
+
+    const recordingRelativeUrl = `/uploads/recordings/${req.file.filename}`;
+    session.recordingUrl = recordingRelativeUrl;
+    await session.save();
+
+    // Add recording milestone event to timeline
+    await TimelineEvent.create({
+      session: session._id,
+      pipeline: "SYSTEM",
+      eventType: "recording.saved",
+      offsetMs: session.actualStart ? Math.max(0, Date.now() - session.actualStart.getTime()) : 0,
+      participant: req.user._id,
+      participantRole: req.user.role || "seeker",
+      payload: {
+        recordingUrl: recordingRelativeUrl,
+        sizeBytes: req.file.size,
+        mimetype: req.file.mimetype,
+      },
+    });
+
+    logger.info({ sessionId, url: recordingRelativeUrl, size: req.file.size }, "Interview recording saved successfully");
+
+    return res.status(201).json({
+      msg: "Interview recording saved successfully",
+      recordingUrl: recordingRelativeUrl,
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, "Error uploading interview recording");
+    return res.status(500).json({ msg: "Failed saving interview recording" });
+  }
+};
+
+/**
+ * GET /api/interviews/:sessionId/recording
+ * Retrieve active recording URL for session
+ */
+exports.getInterviewRecording = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await InterviewSession.findById(sessionId).select("recordingUrl title status");
+    if (!session) {
+      return res.status(404).json({ msg: "Interview session not found" });
+    }
+
+    return res.json({
+      sessionId: session._id,
+      recordingUrl: session.recordingUrl,
+      title: session.title,
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, "Error fetching interview recording");
+    return res.status(500).json({ msg: "Failed fetching recording" });
+  }
+};
+

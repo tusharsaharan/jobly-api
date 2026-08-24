@@ -64,7 +64,19 @@ class AIService {
     }
 
     // Ultimate fallback if all cascade elements somehow fail
-    const fallbackParsed = schema.parse({});
+    const defaultFallback = {
+      skills: ["JavaScript", "Node.js", "React"],
+      title: "Software Engineer",
+      company: "Tech Corp",
+      description: "Software engineering position.",
+      location: "Remote",
+      type: "Full-time",
+      experience: [],
+      education: { degree: "B.Tech", college: "University", cgpa: 8.0, tier: "unknown" },
+      achievements: [],
+      atsRequirements: { minCgpa: 7.0, targetCollegeTier: "any", minExperienceYears: 1, requiredDegree: "B.Tech" }
+    };
+    const fallbackParsed = schema.safeParse({}).success ? schema.parse({}) : (schema.safeParse(defaultFallback).success ? schema.parse(defaultFallback) : defaultFallback);
     return { success: false, data: fallbackParsed, provider: "emergency-fallback" };
   }
 
