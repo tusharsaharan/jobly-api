@@ -1,41 +1,73 @@
-<p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0e1411,50:183a32,100:2a9d7b&height=220&section=header&text=Jobly%20%E2%80%A2%20API%20Platform&fontSize=50&fontColor=7ee0c5&fontAlignY=35&animation=twinkling&desc=Distributed%20Interview%20Orchestrator%20%7C%20CRDT%20Engine%20%7C%20RAG%20Tutor%20%7C%20Deterministic%20ATS&descSize=14&descAlignY=55&descAlign=50" width="100%" alt="Jobly API Platform Header" />
-</p>
+<a id="readme-top"></a>
 
-<p align="center">
-  <img src="https://readme-typing-svg.herokuapp.com?font=JetBrains+Mono&size=18&pause=1000&color=2A9D7B&center=true&vCenter=true&multiline=true&repeat=true&width=800&height=100&lines=Google+Gemini+%2B+pgvector+RAG+Embeddings;Real-Time+Yjs+CRDT+%2B+Socket.IO+Cluster;Multi-Language+Sandboxed+Execution+Engine;Deterministic+ATS+Scoring+%2B+Bar+Raiser+Evaluation" alt="Typing Showcase" />
-</p>
+<!-- PROJECT SHIELDS -->
+<div align="center">
 
-<p align="center">
-  <a href="https://github.com/tusharsaharan/jobly-api"><img src="https://img.shields.io/badge/Runtime-Node.js%2020%2B-2A9D7B?style=for-the-badge&logo=nodedotjs&logoColor=white&labelColor=183A32" alt="Node Runtime" /></a>
-  <a href="https://github.com/tusharsaharan/jobly-api"><img src="https://img.shields.io/badge/Datastore-MongoDB%207%20%2B%20Redis%207-1E7058?style=for-the-badge&logo=mongodb&logoColor=white&labelColor=183A32" alt="Datastores" /></a>
-  <a href="https://github.com/tusharsaharan/jobly-api"><img src="https://img.shields.io/badge/Realtime-Yjs%20CRDT%20%2B%20WebSockets-2A9D7B?style=for-the-badge&logo=socketdotio&logoColor=white&labelColor=183A32" alt="Realtime" /></a>
-  <a href="https://github.com/tusharsaharan/jobly-api"><img src="https://img.shields.io/badge/Tests-36%20Suites%20Passing-183A32?style=for-the-badge&logo=jest&logoColor=white&labelColor=0F2E22" alt="Jest Tests" /></a>
-</p>
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![MIT License][license-shield]][license-url]
+[![LinkedIn][linkedin-shield]][linkedin-url]
+
+</div>
+
+<!-- PROJECT BANNER & LOGO -->
+<div align="center">
+  <br />
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0e1411,50:183a32,100:2a9d7b&height=220&section=header&text=Jobly%20%E2%80%A2%20API%20Platform&fontSize=50&fontColor=7ee0c5&fontAlignY=35&animation=twinkling&desc=Distributed%20Interview%20Orchestrator%20%7C%20CRDT%20Engine%20%7C%20RAG%20Tutor%20%7C%20Deterministic%20ATS&descSize=14&descAlignY=55&descAlign=50" width="100%" alt="Jobly API Platform Banner" />
+
+  <h1 align="center">Jobly API Platform</h1>
+
+  <p align="center">
+    High-throughput distributed backend powering live collaborative coding, WebRTC signaling, vector RAG search, sandboxed execution, and deterministic ATS evaluation.
+    <br />
+    <a href="https://github.com/tusharsaharan/jobly-api"><strong>Explore the documentation »</strong></a>
+    <br />
+    <br />
+    <a href="https://github.com/tusharsaharan/jobly-api">View Demo</a>
+    &middot;
+    <a href="https://github.com/tusharsaharan/jobly-api/issues">Report Bug</a>
+    &middot;
+    <a href="https://github.com/tusharsaharan/jobly-api/issues">Request Feature</a>
+  </p>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<details>
+  <summary><strong>Table of Contents</strong></summary>
+  <ol>
+    <li>
+      <a href="#about-the-project">About The Project</a>
+      <ul>
+        <li><a href="#microservices-and-real-time-pipeline">Microservices and Real-Time Pipeline</a></li>
+        <li><a href="#vector-rag-and-study-engine">Vector RAG and Study Engine</a></li>
+        <li><a href="#sandboxed-execution-engine">Sandboxed Execution Engine</a></li>
+        <li><a href="#deterministic-ats-evaluation">Deterministic ATS Evaluation</a></li>
+        <li><a href="#built-with">Built With</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#getting-started">Getting Started</a>
+      <ul>
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#installation">Installation</a></li>
+        <li><a href="#environment-variables">Environment Variables</a></li>
+      </ul>
+    </li>
+    <li><a href="#api-reference">API Reference</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#license">License</a></li>
+    <li><a href="#contact">Contact</a></li>
+    <li><a href="#acknowledgments">Acknowledgments</a></li>
+  </ol>
+</details>
 
 ---
 
-## Technical Overview
+## About The Project
 
-**Jobly API** is the core distributed backend service powering the Jobly platform. It coordinates multi-party collaborative coding sessions, real-time audio/video WebRTC token routing, isolated code sandboxing, vector RAG query processing, and deterministic ATS evaluation.
-
-```
-+-------------------------------------------------------------------------------+
-|                              JOBLY API GATEWAY                                |
-+-------------------------------------------------------------------------------+
-|  [REST Endpoints]            [WebSocket Upgrades]     [Real-Time Socket.IO]   |
-|  - JWT Auth & RBAC Guard    - /collab/:room (Yjs)    - /messages stream      |
-|  - ATS & Application Engine  - /whiteboard/:id        - Live Signaling HUD    |
-+-------------------------------------------------------------------------------+
-|  [Execution Sandbox]        [AI Inference Hub]       [Storage & Queues]      |
-|  - Isolated PTY Runners     - Google Gemini / LLMs   - MongoDB Datastore     |
-|  - Multi-Lang Toolchains    - Vector Embeddings + RAG - Redis Pub/Sub Cache   |
-+-------------------------------------------------------------------------------+
-```
-
----
-
-## System Architecture
+**Jobly API Platform** is the high-performance distributed backend engine powering the Jobly ecosystem. Built on **Node.js 20+**, **Express**, **MongoDB 7.0**, and **Redis 7.2**, it coordinates real-time collaborative coding sessions, WebSockets upgrades, containerized code sandboxes, and vector RAG retrieval.
 
 ```
                                +------------------------+
@@ -67,76 +99,80 @@
                     [MongoDB + Redis Datastores]
 ```
 
----
+### Microservices and Real-Time Pipeline
 
-## Core Backend Subsystems
+* **Yjs WebSocket Coordinator**: Sub-millisecond synchronization for multi-file Monaco document trees using conflict-free replicated data types.
+* **Socket.IO Cluster**: Broadcasts presence, live typing indicators, and message events across distributed clients with Redis Pub/Sub backplane.
+* **LiveKit SFU Signaling**: Authenticates and issues JWT room tokens for WebRTC peer connections.
 
-### 1. Real-Time Collaborative CRDT Engine
-* **Yjs WebSocket Coordinator**: Synchronizes multi-file Monaco document trees using conflict-free replicated data types.
-* **Granular Checkpointing**: Automatically captures code execution states, manual snapshots, and stage milestones for replay.
+### Vector RAG and Study Engine
 
-### 2. Multi-Language Sandboxed Execution
-* **Isolated Runtime**: Secure runner supporting Python, JavaScript, TypeScript, C++, Java, Go, Rust, and Ruby.
-* **Process Telemetry**: Memory caps, CPU limits, and streaming stdout/stderr buffers.
+* **Hybrid Search Engine**: Combines pgvector semantic dense retrieval with BM25 sparse keyword indexing via Reciprocal Rank Fusion (RRF).
+* **AI Tutor Query Router**: Routes complex engineering questions through Google Gemini Flash models with grounded context.
 
-### 3. Vector RAG Study & Learning Engine
-* **Embeddings & Ingestion**: High-dimensional semantic embeddings for DSA problems, System Design architectures, and interview transcripts.
-* **Reciprocal Rank Fusion (RRF)**: Blends vector similarity search with BM25 lexical keyword matching for high-precision retrieval.
+### Sandboxed Execution Engine
 
-### 4. Deterministic ATS Scoring Engine
+* **Multi-Language Isolated Runner**: Executes Python, JavaScript, TypeScript, C++, Java, Go, Rust, and Ruby with strict memory and CPU quotas.
+* **PTY Terminal Streaming**: Bidirectional pseudo-terminal streaming over WebSockets.
+
+### Deterministic ATS Evaluation
+
 * **Schema Validation**: Evaluates resumes against role criteria with granular scoring across 7 categories.
-* **Role-Fit Evidence**: Generates breakdown metrics, skill gap detection, and actionable suggestions.
+* **Evidence Generator**: Identifies missing competencies and produces actionable resume recommendations.
 
-### 5. Encrypted Real-Time Messaging & Smart Reply
-* **Socket.IO Real-Time Engine**: Presence detection, typing indicators, and message delivery.
-* **Contextual Response Prediction**: Multi-turn semantic intent clustering for rapid recruiter-candidate communication.
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---
 
-## Complete API Surface
+### Built With
 
-### Authentication & Profiles
-* `POST /api/auth/register` - Register a new candidate or recruiter account
-* `POST /api/auth/login` - Authenticate and issue JSON Web Tokens
-* `GET /api/auth/me` - Retrieve authenticated user profile and permissions
+* [![Node.js][Nodejs-badge]][Nodejs-url]
+* [![Express.js][Express-badge]][Express-url]
+* [![MongoDB][MongoDB-badge]][MongoDB-url]
+* [![Redis][Redis-badge]][Redis-url]
+* [![Google Gemini][Gemini-badge]][Gemini-url]
+* [![Yjs CRDT][Yjs-badge]][Yjs-url]
+* [![Socket.IO][SocketIO-badge]][SocketIO-url]
+* [![LiveKit][LiveKit-badge]][LiveKit-url]
+* [![Docker][Docker-badge]][Docker-url]
+* [![Jest][Jest-badge]][Jest-url]
 
-### Technical Interview Studio & Replay
-* `POST /api/interviews/schedule` - Schedule a new technical interview room
-* `GET /api/interviews/room/:roomKey` - Fetch real-time room metadata and token
-* `GET /api/coding/:sessionId/checkpoints` - Retrieve chronological workspace checkpoints
-* `POST /api/coding/:sessionId/checkpoints` - Record an execution or manual checkpoint
-* `GET /api/replay/:sessionId/manifest` - Fetch complete session playback manifest
-
-### Applications & Jobs
-* `GET /api/jobs` - List and search open engineering positions
-* `POST /api/jobs` - Post a new job role with required skills
-* `POST /api/applications/apply` - Submit a job application with parsed resume
-* `GET /api/applications/me` - List applications for candidate
-* `GET /api/applications/recruiter` - List applicants across posted roles
-
-### Real-Time Messaging
-* `GET /api/messages/conversations` - Fetch conversation list with unread counters
-* `GET /api/messages/application/:appId` - Retrieve message history for an application
-* `POST /api/messages/application/:appId` - Send a message and broadcast via Socket.IO
-* `PATCH /api/messages/application/:appId/read` - Mark conversation messages as read
-
-### Study Lab & RAG AI Tutor
-* `POST /api/study/rag-query` - Query the vector RAG engine with interview questions
-* `GET /api/study/lld-problems` - Retrieve Low-Level Design problem catalog
-* `GET /api/study/hld-problems` - Retrieve High-Level Design architectures
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---
 
-## Installation & Setup
+## Getting Started
 
 ### Prerequisites
+
 * Node.js `>= 20.0.0`
 * MongoDB `>= 7.0`
 * Redis `>= 7.0`
+* Docker (optional, for sandboxed PTY runner)
 
-### Environment Configuration
+### Installation
 
-Create a `.env` file in the root directory:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/tusharsaharan/jobly-api.git
+   cd jobly-api
+   ```
+2. Install npm dependencies:
+   ```bash
+   npm install
+   ```
+3. Seed interview problems and initial datasets:
+   ```bash
+   node src/scripts/seedStudyResources.js
+   ```
+4. Start development server:
+   ```bash
+   npm run dev
+   ```
+
+### Environment Variables
+
+Create a `.env` file in the root folder:
 
 ```env
 PORT=5000
@@ -149,32 +185,139 @@ LIVEKIT_API_KEY=your-livekit-api-key
 LIVEKIT_API_SECRET=your-livekit-api-secret
 ```
 
-### Running Locally
-
-```bash
-# Install dependencies
-npm install
-
-# Seed problem datasets and initial resources
-node src/scripts/seedStudyResources.js
-
-# Start API server
-npm run dev
-
-# Run automated Jest test suites
-npm test
-```
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---
 
-## Testing & Quality Assurance
+## API Reference
 
-The API platform includes comprehensive test suites across integration, unit, and chaos testing:
+### Authentication & Users
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/auth/register` | Register candidate or recruiter account |
+| `POST` | `/api/auth/login` | Authenticate and receive JWT token |
+| `GET` | `/api/auth/me` | Fetch authenticated user profile |
 
-```bash
-# Run all unit and integration test suites
-npm test
+### Technical Interview Studio
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/interviews/schedule` | Schedule technical interview session |
+| `GET` | `/api/interviews/room/:roomKey` | Retrieve session room details and tokens |
+| `GET` | `/api/coding/:sessionId/checkpoints` | Fetch chronological code checkpoints |
+| `POST` | `/api/coding/:sessionId/checkpoints` | Save manual or execution checkpoint |
+| `GET` | `/api/replay/:sessionId/manifest` | Fetch replay timeline manifest |
 
-# Run specific chaos / resilience tests
-npx jest tests/chaos/workflow-race-conditions.test.js
-```
+### Applications & ATS Engine
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/applications/apply` | Submit job application with parsed resume |
+| `GET` | `/api/applications/me` | List candidate applications |
+| `GET` | `/api/applications/recruiter` | List recruiter applicants |
+| `POST` | `/api/ats/analyze` | Run deterministic ATS score evaluation |
+
+### Real-Time Messaging
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/messages/conversations` | Fetch conversation summaries |
+| `GET` | `/api/messages/application/:appId` | Retrieve message history |
+| `POST` | `/api/messages/application/:appId` | Send message and broadcast via Socket.IO |
+| `PATCH` | `/api/messages/application/:appId/read` | Mark messages as read |
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+---
+
+## Roadmap
+
+- [x] High-performance Express API Gateway with JWT & RBAC
+- [x] Yjs CRDT real-time document synchronization
+- [x] Multi-language execution sandbox & PTY runner
+- [x] Google Gemini AI resume extraction and interview copilot
+- [x] Hybrid Vector RAG study lab (Embeddings + BM25 RRF)
+- [x] Real-time LinkedIn-grade Smart Reply messaging
+- [x] 36 comprehensive unit, integration, and chaos test suites
+- [ ] Distributed Redis cluster scaling across multi-region nodes
+- [ ] Automated video transcode worker with WebM/MP4 packaging
+
+See the [open issues](https://github.com/tusharsaharan/jobly-api/issues) for a full list of proposed features.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+---
+
+## Contributing
+
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+---
+
+## License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+---
+
+## Contact
+
+Tushar Saharan - [@tusharsaharan](https://github.com/tusharsaharan)
+
+Project Link: [https://github.com/tusharsaharan/jobly-api](https://github.com/tusharsaharan/jobly-api)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+---
+
+## Acknowledgments
+
+* [Yjs Real-Time CRDT Framework](https://yjs.dev/)
+* [LiveKit WebRTC](https://livekit.io/)
+* [Google Gemini AI](https://ai.google.dev/)
+* [Socket.IO](https://socket.io/)
+* [MongoDB](https://www.mongodb.com/)
+* [Redis](https://redis.io/)
+* [Best-README-Template](https://github.com/othneildrew/Best-README-Template)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<!-- MARKDOWN LINKS & IMAGES -->
+[forks-shield]: https://img.shields.io/github/forks/tusharsaharan/jobly-api.svg?style=for-the-badge&color=2A9D7B&labelColor=183A32
+[forks-url]: https://github.com/tusharsaharan/jobly-api/network/members
+[stars-shield]: https://img.shields.io/github/stars/tusharsaharan/jobly-api.svg?style=for-the-badge&color=2A9D7B&labelColor=183A32
+[stars-url]: https://github.com/tusharsaharan/jobly-api/stargazers
+[issues-shield]: https://img.shields.io/github/issues/tusharsaharan/jobly-api.svg?style=for-the-badge&color=2A9D7B&labelColor=183A32
+[issues-url]: https://github.com/tusharsaharan/jobly-api/issues
+[license-shield]: https://img.shields.io/badge/License-MIT-2A9D7B.svg?style=for-the-badge&labelColor=183A32
+[license-url]: https://github.com/tusharsaharan/jobly-api/blob/main/LICENSE
+[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-2A9D7B.svg?style=for-the-badge&logo=linkedin&labelColor=183A32
+[linkedin-url]: https://linkedin.com/in/tushar-saharan
+
+[Nodejs-badge]: https://img.shields.io/badge/Node.js_20+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white
+[Nodejs-url]: https://nodejs.org/
+[Express-badge]: https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white
+[Express-url]: https://expressjs.com/
+[MongoDB-badge]: https://img.shields.io/badge/MongoDB_7.0-47A248?style=for-the-badge&logo=mongodb&logoColor=white
+[MongoDB-url]: https://www.mongodb.com/
+[Redis-badge]: https://img.shields.io/badge/Redis_7.2-DC382D?style=for-the-badge&logo=redis&logoColor=white
+[Redis-url]: https://redis.io/
+[Gemini-badge]: https://img.shields.io/badge/Google_Gemini-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white
+[Gemini-url]: https://ai.google.dev/
+[Yjs-badge]: https://img.shields.io/badge/Yjs_CRDT-5A2475?style=for-the-badge&logo=yjs&logoColor=white
+[Yjs-url]: https://yjs.dev/
+[SocketIO-badge]: https://img.shields.io/badge/Socket.IO-010101?style=for-the-badge&logo=socketdotio&logoColor=white
+[SocketIO-url]: https://socket.io/
+[LiveKit-badge]: https://img.shields.io/badge/LiveKit_WebRTC-002B36?style=for-the-badge&logo=webrtc&logoColor=white
+[LiveKit-url]: https://livekit.io/
+[Docker-badge]: https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white
+[Docker-url]: https://www.docker.com/
+[Jest-badge]: https://img.shields.io/badge/Jest-C21325?style=for-the-badge&logo=jest&logoColor=white
+[Jest-url]: https://jestjs.io/
