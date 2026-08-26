@@ -1,7 +1,7 @@
 const CircuitBreaker = require("opossum");
 const logger = require("../../config/logger");
 const providerFactory = require("./providers/provider.factory");
-const { resumeExtractionSchema, jobGenerationSchema } = require("./schemas");
+const { resumeExtractionSchema, jobGenerationSchema, candidateQuestionsSchema } = require("./schemas");
 const { mergeJobDraft, normalizeJobPayload, normalizeSkills } = require("../../utils/jobLogic");
 
 // Circuit breaker options per provider call
@@ -105,6 +105,16 @@ ${String(pdfText || "").slice(0, 15000)}
    */
   async generateJobFromPrompt(userPrompt, draft = {}, options = {}) {
     const currentDraft = normalizeJobPayload(draft);
+    const outcomeContext = options.outcomeContext;
+    
+    const outcomePromptSection = outcomeContext ? `
+Platform Hiring Outcome Data (Verified on N=${outcomeContext.totalApplications} applicants across platform postings):
+- Historical high-performing phrasing achieved an average ${outcomeContext.avgShortlistRate}% shortlist rate.
+- High-performing tone/structural snippets from successful platform hires:
+${outcomeContext.topSnippets.map((s, i) => `[Pattern ${i+1}]: ${s}`).join("\n")}
+Adopt this clear, outcome-oriented framing and measurable responsibilities in the generated description.
+` : "";
+
     const prompt = `
 You are an expert recruiter assistant. Update the structured job posting from the recruiter's message. Return strictly as JSON:
 - "title": Job title string.
@@ -114,7 +124,7 @@ You are an expert recruiter assistant. Update the structured job posting from th
 - "description": Job description string.
 - "skills": Array of required skills.
 - "atsRequirements": Object with minCgpa (number), targetCollegeTier ("tier1"|"tier2"|"tier3"|"any"), minExperienceYears (number), requiredDegree (string).
-
+${outcomePromptSection}
 Current draft:
 ${JSON.stringify(currentDraft)}
 
@@ -124,6 +134,40 @@ ${String(userPrompt || "").slice(0, 4000)}
 
     const result = await this.executeWithCascade(prompt, jobGenerationSchema, options);
     return mergeJobDraft(currentDraft, result.data);
+  }
+
+  /**
+   * Predict likely candidate questions and default FAQ answers for a job draft
+   */
+  async predictCandidateQuestions(jobPayload = {}, options = {}) {
+    const prompt = `
+You are a senior talent acquisition strategist. Analyze this job posting and identify 4-5 high-signal questions that qualified candidates will ask before or during interviews.
+Generate practical, transparent default answers based on the job details provided.
+
+Job Details:
+Title: ${jobPayload.title || "Software Role"}
+Company: ${jobPayload.company || "Tech Company"}
+Location: ${jobPayload.location || "Remote/Hybrid"}
+Type: ${jobPayload.type || "Full-time"}
+Skills: ${(jobPayload.skills || []).join(", ")}
+Description:
+${String(jobPayload.description || "").slice(0, 3000)}
+
+Return strictly as JSON with this schema:
+{
+  "questions": [
+    {
+      "id": "q-1",
+      "question": "What is the day-to-day team structure and reporting line?",
+      "defaultAnswer": "You will collaborate closely with a cross-functional team of 4 engineers, a product manager, and a designer.",
+      "category": "team_structure"
+    }
+  ]
+}
+`;
+
+    const result = await this.executeWithCascade(prompt, candidateQuestionsSchema, options);
+    return result.data?.questions || [];
   }
 }
 

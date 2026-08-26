@@ -39,7 +39,19 @@ const jobGenerationSchema = z.object({
   }),
 });
 
+const candidateQuestionsSchema = z.object({
+  questions: z.array(
+    z.object({
+      id: z.string().optional().default("q-1"),
+      question: z.string().min(5),
+      defaultAnswer: z.string().default(""),
+      category: z.string().default("tech_stack"),
+    })
+  ).default([]),
+});
+
 module.exports = {
   resumeExtractionSchema,
   jobGenerationSchema,
+  candidateQuestionsSchema,
 };

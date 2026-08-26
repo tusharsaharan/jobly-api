@@ -33,24 +33,41 @@ async function createCheckpoint(session, triggerType, triggerLabel) {
     const metaMap = doc.getMap("meta");
     const activeLang = metaMap.get("activeLanguage") || session.codeWorkspace?.activeLanguage || "python";
     const ext = activeLang === "cpp" ? "cpp" : activeLang === "javascript" ? "js" : activeLang === "typescript" ? "ts" : activeLang === "java" ? "java" : "py";
-    const activePath = `/solution.${ext}`;
+    const expectedSrcPath = `/src/solution.${ext}`;
+    const expectedRootPath = `/solution.${ext}`;
 
-    const existingActiveFile = filesSnapshot.find((f) => f.path === activePath);
+    // Sort filesSnapshot so primary code solution file is at index 0
+    filesSnapshot.sort((a, b) => {
+      if (a.path === expectedSrcPath || a.path === expectedRootPath) return -1;
+      if (b.path === expectedSrcPath || b.path === expectedRootPath) return 1;
+      if (a.path.includes("solution")) return -1;
+      if (b.path.includes("solution")) return 1;
+      return 0;
+    });
+
+    const existingActiveFile = filesSnapshot.find(
+      (f) => f.path === expectedSrcPath || f.path === expectedRootPath || f.path.includes("solution")
+    );
+
     if (!existingActiveFile) {
-      const content = doc.getText(activePath).toString();
-      filesSnapshot.unshift({
-        path: activePath,
-        name: `solution.${ext}`,
-        content: content || "",
-        language: activeLang,
-      });
+      const srcText = doc.getText(expectedSrcPath).toString();
+      const rootText = doc.getText(expectedRootPath).toString();
+      const content = srcText || rootText || "";
+      if (content) {
+        filesSnapshot.unshift({
+          path: srcText ? expectedSrcPath : expectedRootPath,
+          name: `solution.${ext}`,
+          content,
+          language: activeLang,
+        });
+      }
     }
 
     // Fallback if filesSnapshot is still empty
     if (filesSnapshot.length === 0) {
-      const defaultText = doc.getText("/solution.py").toString();
+      const defaultText = doc.getText("/src/solution.py").toString() || doc.getText("/solution.py").toString();
       filesSnapshot.push({
-        path: "/solution.py",
+        path: "/src/solution.py",
         name: "solution.py",
         content: defaultText,
         language: "python",
@@ -78,7 +95,7 @@ async function createCheckpoint(session, triggerType, triggerLabel) {
     });
 
     // Record into Unified Timeline
-    await TimelineEvent.create({
+    const timelineEvent = await TimelineEvent.create({
       session: session._id,
       pipeline: "CODING",
       eventType: "code.checkpoint",
@@ -86,8 +103,19 @@ async function createCheckpoint(session, triggerType, triggerLabel) {
       payload: {
         checkpointId: checkpoint._id.toString(),
         text: `Checkpoint #${sequenceNumber}: ${checkpoint.triggerLabel}`,
+        sequenceNumber,
+        triggerType,
+        filesCount: filesSnapshot.length,
       },
     });
+
+    // Broadcast timeline event and checkpoint created to all room participants
+    const { getIO } = require("../infrastructure/realtime/socketio");
+    const io = getIO();
+    if (io && session.roomKey) {
+      io.to(`interview:${session.roomKey}`).emit("timeline_event_received", timelineEvent);
+      io.to(`interview:${session.roomKey}`).emit("checkpoint_created", checkpoint);
+    }
 
     logger.info(
       { sessionId: session._id, sequenceNumber, triggerType },
@@ -157,7 +185,7 @@ async function restoreCheckpoint(session, checkpointId) {
       ? Math.max(0, Date.now() - new Date(session.actualStart).getTime())
       : 0;
 
-    await TimelineEvent.create({
+    const timelineEvent = await TimelineEvent.create({
       session: session._id,
       pipeline: "CODING",
       eventType: "checkpoint.restored",
@@ -165,8 +193,17 @@ async function restoreCheckpoint(session, checkpointId) {
       payload: {
         checkpointId: checkpoint._id.toString(),
         text: `Restored workspace to Checkpoint #${checkpoint.sequenceNumber}`,
+        sequenceNumber: checkpoint.sequenceNumber,
       },
     });
+
+    // Broadcast timeline event and checkpoint restored to all room participants
+    const { getIO } = require("../infrastructure/realtime/socketio");
+    const io = getIO();
+    if (io && session.roomKey) {
+      io.to(`interview:${session.roomKey}`).emit("timeline_event_received", timelineEvent);
+      io.to(`interview:${session.roomKey}`).emit("checkpoint_restored", checkpoint);
+    }
 
     logger.info(
       { sessionId: session._id, checkpointId, sequenceNumber: checkpoint.sequenceNumber },

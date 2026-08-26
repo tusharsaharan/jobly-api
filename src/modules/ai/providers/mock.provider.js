@@ -13,6 +13,38 @@ class MockRuleBasedProvider extends BaseAIProvider {
   async generateJSON(prompt, options = {}) {
     const text = String(prompt || "");
 
+    // Check if this is a candidate questions request
+    if (text.toLowerCase().includes("questions") || text.toLowerCase().includes("faq")) {
+      return JSON.stringify({
+        questions: [
+          {
+            id: "q-1",
+            question: "What is the day-to-day team structure and reporting line?",
+            defaultAnswer: "You will collaborate with 4 senior engineers, a product manager, and an engineering lead.",
+            category: "team_structure",
+          },
+          {
+            id: "q-2",
+            question: "What are the core technologies and development workflows used daily?",
+            defaultAnswer: "Our stack runs React, TypeScript, and Node.js with automated CI/CD and pull request reviews.",
+            category: "tech_stack",
+          },
+          {
+            id: "q-3",
+            question: "What does the growth path and career progression look like for this position?",
+            defaultAnswer: "We offer structured bi-annual performance cycles with clear milestones for staff-level progression.",
+            category: "growth_path",
+          },
+          {
+            id: "q-4",
+            question: "What are the remote work expectations and core collaboration hours?",
+            defaultAnswer: "We operate fully remote with 4 overlapping collaboration hours per day.",
+            category: "logistics",
+          },
+        ],
+      });
+    }
+
     // Check if this is a resume parse request or job generation request
     if (text.toLowerCase().includes("resume") || text.toLowerCase().includes("candidate")) {
       const skillsList = [

@@ -7,5 +7,6 @@ router.use(authMiddleware);
 
 router.get("/stats", dashboardController.getRecruiterStats);
 router.get("/interviews", dashboardController.getDashboardInterviews);
+router.get("/leaderboard", dashboardController.getRecruiterLeaderboard);
 
 module.exports = router;

@@ -55,6 +55,16 @@ router.patch(
   validateBody(updateStageSchema),
   interviewController.updateInterviewStage
 );
+router.put(
+  "/:sessionId/stage",
+  roleMiddleware("recruiter"),
+  validateBody(updateStageSchema),
+  interviewController.updateInterviewStage
+);
+
+// Transition interview status (Recruiter only)
+router.patch("/:sessionId/status", roleMiddleware("recruiter"), interviewController.updateInterviewStatus);
+router.put("/:sessionId/status", roleMiddleware("recruiter"), interviewController.updateInterviewStatus);
 
 // WebRTC LiveKit signed access token
 router.post("/:sessionId/livekit-token", interviewController.getLiveKitToken);

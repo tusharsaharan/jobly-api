@@ -159,6 +159,17 @@ function setupSocketIO(server) {
       }
     });
 
+    // Proctor event relay: seeker emits focus/fullscreen changes, forwarded to interview team
+    socket.on("proctor_event", ({ roomKey, eventType, timestamp }) => {
+      if (!roomKey || !eventType) return;
+      const roomChannel = `interview:${roomKey}`;
+      socket.to(roomChannel).emit("proctor_event_received", {
+        eventType,
+        timestamp: timestamp || Date.now(),
+        senderId: userId,
+      });
+    });
+
     // ==========================================
     // Real-Time Competition Room Handlers (Quiz / CP)
     // ==========================================
@@ -313,8 +324,11 @@ function setupSocketIO(server) {
     });
 
     // Real-Time Interactive Terminal Streaming
-    socket.on("terminal_input", ({ terminalId, data }) => {
+    socket.on("terminal_input", ({ roomKey, terminalId, data }) => {
       try {
+        if (roomKey) {
+          socket.to(`interview:${roomKey}`).emit("terminal_input_received", { terminalId, data, senderId: socket.user?._id });
+        }
         const terminalService = require("../terminal/terminalService");
         Promise.resolve(terminalService.writeToTerminal(terminalId, data)).catch((err) => {
           logger.debug({ err: err.message, terminalId }, "Terminal input error");

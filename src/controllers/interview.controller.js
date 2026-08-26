@@ -493,7 +493,7 @@ exports.updateInterviewStage = async (req, res) => {
         ? Math.max(0, Date.now() - session.actualStart.getTime())
         : 0;
 
-    await TimelineEvent.create({
+    const timelineEvent = await TimelineEvent.create({
       session: session._id,
       pipeline: "STAGE",
       eventType: "stage.transition",
@@ -503,6 +503,7 @@ exports.updateInterviewStage = async (req, res) => {
       payload: {
         stage,
         status: session.status,
+        text: `Stage changed to ${stage.replace(/_/g, " ")}`,
       },
     });
 
@@ -519,6 +520,7 @@ exports.updateInterviewStage = async (req, res) => {
         actualStart: session.actualStart,
         offsetMs: calculatedOffset,
       });
+      io.to(`interview:${session.roomKey}`).emit("timeline_event_received", timelineEvent);
     }
 
     logger.info({ sessionId, stage, status: session.status }, "Interview stage updated");
@@ -530,6 +532,84 @@ exports.updateInterviewStage = async (req, res) => {
   } catch (err) {
     logger.error({ err: err.message }, "Stage transition error");
     return res.status(400).json({ msg: err.message || "Failed updating stage" });
+  }
+};
+
+/**
+ * Transition interview session status (e.g. LIVE, COMPLETED)
+ * PATCH or PUT /api/interviews/:sessionId/status
+ */
+exports.updateInterviewStatus = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { status } = req.body;
+
+    if (!["SCHEDULED", "LIVE", "COMPLETED", "CANCELLED"].includes(status)) {
+      return res.status(400).json({ msg: "Invalid session status" });
+    }
+
+    const session = await InterviewSession.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ msg: "Interview session not found" });
+    }
+
+    if (session.recruiter.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ msg: "Only the lead recruiter can change interview status." });
+    }
+
+    session.status = status;
+    if (status === "LIVE" && !session.actualStart) {
+      session.actualStart = new Date();
+      if (session.stage === "WAITING_ROOM") {
+        session.stage = "INTRO";
+      }
+    }
+    if (status === "COMPLETED" && !session.actualEnd) {
+      session.actualEnd = new Date();
+      session.stage = "COMPLETED";
+    }
+
+    await session.save();
+
+    const calculatedOffset = session.actualStart
+      ? Math.max(0, Date.now() - session.actualStart.getTime())
+      : 0;
+
+    const timelineEvent = await TimelineEvent.create({
+      session: session._id,
+      pipeline: "STAGE",
+      eventType: "session.status_change",
+      offsetMs: calculatedOffset,
+      participant: req.user._id,
+      participantRole: "recruiter",
+      payload: {
+        status,
+        stage: session.stage,
+        text: `Interview session status: ${status}`,
+      },
+    });
+
+    const { getIO } = require("../infrastructure/realtime/socketio");
+    const io = getIO();
+    if (io && session.roomKey) {
+      io.to(`interview:${session.roomKey}`).emit("session_status_changed", {
+        status,
+        stage: session.stage,
+        actualStart: session.actualStart,
+        actualEnd: session.actualEnd,
+      });
+      io.to(`interview:${session.roomKey}`).emit("timeline_event_received", timelineEvent);
+    }
+
+    logger.info({ sessionId, status, stage: session.stage }, "Interview status updated");
+
+    return res.json({
+      msg: `Interview status updated to ${status}`,
+      session,
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, "Status transition error");
+    return res.status(400).json({ msg: err.message || "Failed updating status" });
   }
 };
 

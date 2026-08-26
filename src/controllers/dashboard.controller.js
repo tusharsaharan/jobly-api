@@ -113,3 +113,75 @@ exports.getDashboardInterviews = async (req, res) => {
     return res.status(500).json({ msg: "Failed retrieving dashboard interviews" });
   }
 };
+
+/**
+ * GET /api/dashboard/leaderboard
+ * Aggregated velocity and quality rankings for recruiters
+ */
+exports.getRecruiterLeaderboard = async (req, res) => {
+  try {
+    const User = require("../models/User");
+    const Job = require("../models/Job");
+    const Application = require("../models/Application");
+
+    const recruiters = await User.find({ role: "recruiter" }).select("name email createdAt").lean();
+
+    const leaderboard = await Promise.all(
+      recruiters.map(async (rec) => {
+        const jobs = await Job.find({ recruiter: rec._id }).lean();
+        const filledJobs = jobs.filter((j) => j.closureReason === "filled");
+        const activeJobs = jobs.filter((j) => j.status === "open");
+
+        const applications = await Application.find({ recruiter: rec._id }).lean();
+        const shortlisted = applications.filter((a) => a.status === "shortlisted");
+
+        // Calculate average fill duration
+        let totalFillDays = 0;
+        let countedFills = 0;
+        for (const fj of filledJobs) {
+          if (fj.closedAt) {
+            const days = Math.max(1, Math.round((new Date(fj.closedAt) - new Date(fj.createdAt)) / (1000 * 60 * 60 * 24)));
+            totalFillDays += days;
+            countedFills++;
+          }
+        }
+        const avgTimeToFill = countedFills > 0 ? Math.round(totalFillDays / countedFills) : 24;
+
+        // Calculate average candidate ATS score
+        const atsScores = applications.filter((a) => typeof a.atsScore === "number").map((a) => a.atsScore);
+        const avgAtsScore = atsScores.length > 0
+          ? Math.round(atsScores.reduce((a, b) => a + b, 0) / atsScores.length)
+          : 78;
+
+        const badges = [];
+        if (avgTimeToFill <= 20) badges.push({ name: "Velocity Leader", description: "Sub-20 day average fill time" });
+        if (avgAtsScore >= 80) badges.push({ name: "High Match Quality", description: "Top tier ATS candidate profile index" });
+        if (jobs.length >= 5) badges.push({ name: "Active Publisher", description: "Consistent hiring pipeline" });
+
+        return {
+          id: rec._id,
+          name: rec.name,
+          totalPostings: jobs.length,
+          activePostings: activeJobs.length,
+          completedHires: filledJobs.length,
+          totalApplicants: applications.length,
+          shortlistedCount: shortlisted.length,
+          avgTimeToFillDays: avgTimeToFill,
+          avgCandidateAts: avgAtsScore,
+          badges,
+          score: (filledJobs.length * 15) + (shortlisted.length * 5) + (jobs.length * 2) + Math.max(0, 100 - avgTimeToFill)
+        };
+      })
+    );
+
+    leaderboard.sort((a, b) => b.score - a.score);
+
+    res.json({
+      leaderboard: leaderboard.slice(0, 10),
+      currentRecruiterRank: leaderboard.findIndex((r) => r.id.toString() === req.user._id.toString()) + 1 || 1,
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, "Error calculating leaderboard");
+    res.status(500).json({ msg: "Failed calculating recruiter leaderboard" });
+  }
+};

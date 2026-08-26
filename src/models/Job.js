@@ -13,6 +13,27 @@ const jobSchema = new mongoose.Schema({
     minExperienceYears: { type: Number, min: 0, max: 60, default: 0 },
     requiredDegree: { type: String, trim: true, maxlength: 120, default: "" }
   },
+  salaryRange: {
+    min: { type: Number },
+    max: { type: Number },
+    currency: { type: String, default: "USD" },
+    period: { type: String, enum: ["hourly", "monthly", "annual"], default: "annual" },
+    visible: { type: Boolean, default: true }
+  },
+  status: {
+    type: String,
+    enum: ["draft", "open", "closed", "archived"],
+    default: "open",
+    index: true
+  },
+  closureReason: {
+    type: String,
+    enum: ["filled", "abandoned", "cancelled", "expired", "none"],
+    default: "none"
+  },
+  closedAt: {
+    type: Date
+  },
   recruiter: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
