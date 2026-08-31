@@ -9,10 +9,11 @@ const { sessionOffsetMs } = require("../services/interviewClock");
  * Authorize participant
  */
 async function authorizeParticipant(sessionIdOrRoomKey, user) {
+  const tenantFilter = user?.tenantId ? { tenantId: user.tenantId } : {};
   const session = await InterviewSession.findOne({
-    $or: [
-      { _id: sessionIdOrRoomKey.match(/^[0-9a-fA-F]{24}$/) ? sessionIdOrRoomKey : null },
-      { roomKey: sessionIdOrRoomKey },
+    $and: [
+      { $or: [{ _id: sessionIdOrRoomKey.match(/^[0-9a-fA-F]{24}$/) ? sessionIdOrRoomKey : null }, { roomKey: sessionIdOrRoomKey }] },
+      tenantFilter,
     ],
   }).populate("seeker recruiter additionalInterviewers");
 
@@ -37,6 +38,10 @@ async function authorizeParticipant(sessionIdOrRoomKey, user) {
 
   return session;
 }
+
+const MAX_WHITEBOARD_ELEMENTS = 3000;
+const MAX_WHITEBOARD_TOTAL_SIZE = 500 * 1024; // 500KB
+const MAX_WHITEBOARD_ELEMENT_SIZE = 20 * 1024; // 20KB per element
 
 /**
  * POST /api/whiteboard/:sessionId/snapshots
@@ -67,12 +72,29 @@ exports.createSnapshot = async (req, res) => {
       }
     });
 
-    const lastSnapshot = await WhiteboardSnapshot.findOne({ session: session._id })
-      .sort({ sequenceNumber: -1 })
-      .select("sequenceNumber")
-      .lean();
+    // Whiteboard size limits: element count and size (prevent 16MB breach and S3 fallback)
+    if (objects.length > MAX_WHITEBOARD_ELEMENTS) {
+      return res.status(413).json({ msg: `Whiteboard element limit exceeded: ${objects.length} > ${MAX_WHITEBOARD_ELEMENTS}` });
+    }
+    let totalSize = 0;
+    for (const obj of objects) {
+      const elStr = JSON.stringify(obj);
+      if (elStr.length > MAX_WHITEBOARD_ELEMENT_SIZE) {
+        return res.status(413).json({ msg: `Whiteboard element too large: ${elStr.length} bytes > ${MAX_WHITEBOARD_ELEMENT_SIZE} (id: ${obj.id || "unknown"})` });
+      }
+      totalSize += elStr.length;
+    }
+    if (totalSize > MAX_WHITEBOARD_TOTAL_SIZE) {
+      return res.status(413).json({ msg: `Whiteboard total size exceeds ${MAX_WHITEBOARD_TOTAL_SIZE} bytes (${totalSize} bytes)` });
+    }
 
-    const sequenceNumber = (lastSnapshot?.sequenceNumber || 0) + 1;
+    // Atomic monotonic sequence to prevent duplicate numbers under concurrent two-user snapshots (fixes brutal race)
+    const updatedSession = await InterviewSession.findOneAndUpdate(
+      { _id: session._id },
+      { $inc: { whiteboardSequence: 1 } },
+      { new: true }
+    );
+    const sequenceNumber = updatedSession.whiteboardSequence;
 
     const offsetMs = sessionOffsetMs(session);
 

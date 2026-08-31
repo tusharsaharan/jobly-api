@@ -3,6 +3,7 @@ const InterviewSession = require("../models/InterviewSession");
 const TimelineEvent = require("../models/TimelineEvent");
 const CodeCheckpoint = require("../models/CodeCheckpoint");
 const WhiteboardSnapshot = require("../models/WhiteboardSnapshot");
+const cacheService = require("../infrastructure/cache/cache.service");
 
 /**
  * Authorize participant
@@ -47,11 +48,18 @@ async function authorizeParticipant(sessionIdOrRoomKey, user) {
 exports.getReplayManifest = async (req, res) => {
   try {
     const { sessionId } = req.params;
+    const cacheKey = `replay:manifest:${sessionId}`;
+
+    const cached = await cacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const session = await authorizeParticipant(sessionId, req.user);
 
     const timelineEvents = await TimelineEvent.find({ session: session._id })
       .populate("participant", "name role")
-      .sort({ offsetMs: 1 })
+      .sort({ offsetMs: 1, sequenceNumber: 1, createdAt: 1 })
       .lean();
 
     const totalDurationMs =
@@ -97,7 +105,42 @@ exports.getReplayManifest = async (req, res) => {
           : `${ev.eventType}`,
     }));
 
-    return res.json({
+    let recordingUrl = null;
+    if (session.recordingUrl) {
+      const rawUrl = String(session.recordingUrl).trim();
+      if (rawUrl.startsWith("s3://")) {
+        try {
+          const { getPresignedM3U8Url, getPresignedDownloadUrl } = require("../config/s3");
+          // Extract key without bucket, avoid double slash — handle s3://bucket/key and s3://bucket//key
+          const withoutProtocol = rawUrl.replace(/^s3:\/\//, "");
+          const slashIdx = withoutProtocol.indexOf("/");
+          const recordingKey = slashIdx >= 0
+            ? withoutProtocol.slice(slashIdx + 1).replace(/^\/+/, "").replace(/\/\/+/g, "/")
+            : withoutProtocol.replace(/^\/+/, "");
+          if (!recordingKey) {
+            recordingUrl = rawUrl;
+          } else if (recordingKey.endsWith(".m3u8") || recordingKey.includes("/index.m3u8")) {
+            recordingUrl = await getPresignedM3U8Url(recordingKey, 7200); // 2 hours
+          } else {
+            recordingUrl = await getPresignedDownloadUrl(recordingKey, 7200);
+          }
+        } catch (err) {
+          logger.warn({ err: err.message }, "Failed generating presigned recording URL, using raw URL");
+          recordingUrl = rawUrl;
+        }
+      } else if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+        recordingUrl = rawUrl;
+      } else if (rawUrl.startsWith("/uploads/")) {
+        // Local fallback — ensure single leading slash, avoid double slash when frontend concatenates with base URL
+        recordingUrl = "/" + rawUrl.replace(/^\/+/, "").replace(/\/\/+/g, "/");
+      } else {
+        // Treat as bare key or relative path — normalize to single-leading-slash form
+        const normalized = rawUrl.replace(/^\/+/, "").replace(/\/\/+/g, "/");
+        recordingUrl = "/" + normalized;
+      }
+    }
+
+    const response = {
       session: {
         _id: session._id,
         roomKey: session.roomKey,
@@ -107,7 +150,7 @@ exports.getReplayManifest = async (req, res) => {
         recruiter: session.recruiter,
         status: session.status,
         stage: session.stage,
-        recordingUrl: session.recordingUrl || null,
+        recordingUrl,
         actualStart: session.actualStart,
         actualEnd: session.actualEnd,
       },
@@ -128,7 +171,10 @@ exports.getReplayManifest = async (req, res) => {
         },
       },
       timelineEvents,
-    });
+    };
+
+    await cacheService.set(cacheKey, response, 300);
+    return res.json(response);
   } catch (err) {
     logger.error({ err: err.message }, "Error fetching replay manifest");
     return res.status(err.status || 500).json({ msg: err.message || "Failed fetching replay manifest" });
@@ -143,9 +189,37 @@ exports.getReplayFrame = async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { offsetMs = 0 } = req.query;
-    const targetOffset = Number(offsetMs);
+    let targetOffset = Number(offsetMs);
+    // Validation: targetOffset must be finite number
+    if (isNaN(targetOffset) || !isFinite(targetOffset)) {
+      return res.status(400).json({ msg: "Invalid offsetMs: must be a finite number" });
+    }
+    if (targetOffset < 0) {
+      // Spec allows clamp or 400 — we return 400 for strict validation, but also support clamp if client expects it
+      return res.status(400).json({ msg: "offsetMs must be >= 0" });
+    }
 
-    const session = await authorizeParticipant(sessionId, req.user);
+    const sessionForValidation = await authorizeParticipant(sessionId, req.user);
+    // Additional validation against total duration if session has completed timestamps
+    const maxOffset =
+      sessionForValidation.actualEnd && sessionForValidation.actualStart
+        ? Math.max(0, new Date(sessionForValidation.actualEnd).getTime() - new Date(sessionForValidation.actualStart).getTime())
+        : null;
+    if (maxOffset != null && targetOffset > maxOffset) {
+      // Clamp to maxOffset per spec alternative (also could return 400). We clamp and continue.
+      targetOffset = maxOffset;
+    }
+
+    const frameCacheKey = `replay:frame:${sessionId}:${targetOffset}`;
+    // Reuse already-authorized session to avoid double DB fetch
+    const session = sessionForValidation;
+
+    const cachedFrame = await cacheService.get(frameCacheKey);
+    if (cachedFrame) {
+      return res.json(cachedFrame);
+    }
+
+    // session already authorized above as sessionForValidation / session
 
     // 1. Find most recent code checkpoint up to targetOffset
     const codeCheckpoint = await CodeCheckpoint.findOne({
@@ -164,33 +238,33 @@ exports.getReplayFrame = async (req, res) => {
       .sort({ offsetMs: -1, sequenceNumber: -1 })
       .lean();
 
-    // 3. Find active stage at targetOffset
+    // 3. Find active stage at targetOffset — ordering uses sequenceNumber tie-breaker
     const lastStageEvent = await TimelineEvent.findOne({
       session: session._id,
       pipeline: "STAGE",
       offsetMs: { $lte: targetOffset },
     })
-      .sort({ offsetMs: -1 })
+      .sort({ offsetMs: -1, sequenceNumber: -1, createdAt: -1 })
       .lean();
 
-    // 4. Find all transcript segments up to targetOffset
+    // 4. Find all transcript segments up to targetOffset — ordered by offsetMs + sequenceNumber
     const transcriptHistory = await TimelineEvent.find({
       session: session._id,
       pipeline: "COMMUNICATION",
       offsetMs: { $lte: targetOffset },
     })
       .populate("participant", "name role")
-      .sort({ offsetMs: 1 })
+      .sort({ offsetMs: 1, sequenceNumber: 1, createdAt: 1 })
       .lean();
 
-    // Active speaking event right now (within 4000ms window)
+    // Active speaking event right now (within 4000ms window) — ordered by sequenceNumber
     const activeSpeechEvent = await TimelineEvent.findOne({
       session: session._id,
       pipeline: "COMMUNICATION",
       offsetMs: { $gte: Math.max(0, targetOffset - 3500), $lte: targetOffset + 1000 },
     })
       .populate("participant", "name role")
-      .sort({ offsetMs: -1 })
+      .sort({ offsetMs: -1, sequenceNumber: -1 })
       .lean();
 
     // Fallback code files
@@ -222,9 +296,9 @@ exports.getReplayFrame = async (req, res) => {
       activeSpeechEvent?.participant?.name ||
       (activeSpeakerRole === "seeker" ? session.seeker?.name || "Candidate" : session.recruiter?.name || "Interviewer");
 
-    return res.json({
+    const frameResponse = {
       offsetMs: targetOffset,
-      activeStage: lastStageEvent?.payload?.stage || (targetOffset > 10000 ? (session.stage || "CODING") : "INTRODUCTION"),
+      activeStage: lastStageEvent?.payload?.stage || (targetOffset > 10000 ? (session.stage || "CODING") : "WAITING_ROOM"),
       codeWorkspace: {
         checkpointId: codeCheckpoint?._id || null,
         sequenceNumber: codeCheckpoint?.sequenceNumber || 0,
@@ -278,7 +352,10 @@ exports.getReplayFrame = async (req, res) => {
         text: t.payload?.text || "",
         offsetMs: t.offsetMs,
       })),
-    });
+    };
+
+    await cacheService.set(frameCacheKey, frameResponse, 60);
+    return res.json(frameResponse);
   } catch (err) {
     logger.error({ err: err.message }, "Error reconstructing replay frame");
     return res.status(err.status || 500).json({ msg: err.message || "Failed reconstructing replay frame" });

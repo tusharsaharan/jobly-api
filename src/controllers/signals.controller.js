@@ -1,8 +1,9 @@
+const mongoose = require("mongoose");
 const InterviewSignal = require("../models/InterviewSignal");
 const InterviewSession = require("../models/InterviewSession");
 const TimelineEvent = require("../models/TimelineEvent");
 const { extractAllSignals } = require("../modules/signals/signalExtractor");
-const { resolveEvidenceArtifact, createEvidenceReference } = require("../modules/signals/evidenceEngine");
+const { resolveEvidenceArtifact, createEvidenceReference, computeVerificationHash, verifyEvidenceReference } = require("../modules/signals/evidenceEngine");
 const { scoreInterviewSession } = require("../modules/signals/rubricScorer");
 const { getSocketIO } = require("../infrastructure/realtime/socketio");
 const logger = require("../config/logger");
@@ -30,7 +31,27 @@ async function extractSignals(req, res) {
       return res.status(400).json({ success: false, msg: "sessionId is required" });
     }
 
+    // B13: Validate sessionId is valid ObjectId before findById to avoid CastError -> 500
+    if (!mongoose.Types.ObjectId.isValid(String(sessionId))) {
+      return res.status(400).json({ success: false, msg: "Invalid sessionId format" });
+    }
+
     const session = await InterviewSession.findById(sessionId).lean();
+    // Participant authorization — prevent any user from injecting signals for arbitrary session
+    if (session) {
+      const uid = String(req.user?._id);
+      const isSeeker = String(session.seeker) === uid;
+      const isRecruiter = String(session.recruiter) === uid;
+      const isAdditional = (session.additionalInterviewers || []).some((id) => String(id) === uid);
+      if (!isSeeker && !isRecruiter && !isAdditional) {
+        return res.status(403).json({ success: false, msg: "Access denied. Not a participant." });
+      }
+      if (req.user?.tenantId && session.tenantId && session.tenantId !== req.user.tenantId) {
+        return res.status(403).json({ success: false, msg: "Tenant mismatch." });
+      }
+    } else {
+      return res.status(404).json({ success: false, msg: "Interview session not found" });
+    }
     const candidateId = session?.seeker ? String(session.seeker) : String(req.user?._id || "");
 
     const signals = extractAllSignals({
@@ -59,20 +80,40 @@ async function extractSignals(req, res) {
         evidenceRef: s.evidenceRef || null,
       }));
 
-      await InterviewSignal.insertMany(docs, { ordered: false }).catch((err) => {
-        logger.debug({ err: err.message }, "Signal batch persistence note");
-      });
+      try {
+        await InterviewSignal.insertMany(docs, { ordered: false });
+      } catch (err) {
+        logger.error({ err: err.message, sessionId }, "Signal batch persistence failed");
+        return res.status(500).json({ success: false, msg: err.message || "Failed to persist signals" });
+      }
     }
 
-    // Broadcast to room interviewers if socketio available
+    // Broadcast to room interviewers if socketio available — plan requires interview_signal_emitted + evidence_created
     const io = getSocketIO();
     if (io && session?.roomKey) {
+      // Debounced emit: batch signals as single event to avoid congestion
       io.to(`interview:${session.roomKey}:interviewers`).emit("interview_signals_extracted", {
         sessionId,
         count: signals.length,
         signals,
         offsetMs,
       });
+      // Canonical plan event names
+      for (const sig of signals.slice(0, 20)) {
+        io.to(`interview:${session.roomKey}:interviewers`).emit("interview_signal_emitted", {
+          sessionId,
+          signal: sig,
+          offsetMs: sig.offsetMs,
+          emittedAt: new Date().toISOString(),
+        });
+        if (sig.evidenceRef) {
+          io.to(`interview:${session.roomKey}:interviewers`).emit("evidence_created", {
+            sessionId,
+            evidenceRef: sig.evidenceRef,
+            signalName: sig.name,
+          });
+        }
+      }
     }
 
     return res.json({
@@ -92,6 +133,15 @@ async function extractSignals(req, res) {
 async function getSignalsBySession(req, res) {
   try {
     const { sessionId } = req.params;
+    // Authorize participant before leaking signals
+    const session = await InterviewSession.findById(sessionId).select("seeker recruiter additionalInterviewers tenantId").lean();
+    if (!session) return res.status(404).json({ success: false, msg: "Interview session not found" });
+    const uid = String(req.user?._id);
+    const isSeeker = String(session.seeker) === uid;
+    const isRecruiter = String(session.recruiter) === uid;
+    const isAdditional = (session.additionalInterviewers || []).some((id) => String(id) === uid);
+    if (!isSeeker && !isRecruiter && !isAdditional) return res.status(403).json({ success: false, msg: "Access denied." });
+    if (req.user?.tenantId && session.tenantId && session.tenantId !== req.user.tenantId) return res.status(403).json({ success: false, msg: "Tenant mismatch." });
     const signals = await InterviewSignal.find({ sessionId }).sort({ offsetMs: 1 }).lean();
 
     return res.json({
@@ -115,6 +165,15 @@ async function evaluateSessionSignals(req, res) {
       .populate("seeker", "name email")
       .populate("recruiter", "name email")
       .lean();
+    // Participant check
+    if (session) {
+      const uid = String(req.user?._id);
+      const isSeeker = String(session.seeker?._id || session.seeker) === uid;
+      const isRecruiter = String(session.recruiter?._id || session.recruiter) === uid;
+      const isAdditional = (session.additionalInterviewers || []).some((id) => String(id?._id || id) === uid);
+      if (!isSeeker && !isRecruiter && !isAdditional) return res.status(403).json({ success: false, msg: "Access denied." });
+      if (req.user?.tenantId && session.tenantId && session.tenantId !== req.user.tenantId) return res.status(403).json({ success: false, msg: "Tenant mismatch." });
+    }
 
     if (!session) {
       return res.status(404).json({ success: false, msg: "Interview session not found" });
@@ -170,12 +229,18 @@ async function evaluateSessionSignals(req, res) {
  */
 async function resolveEvidence(req, res) {
   try {
-    const { evidenceRef, sessionId } = req.body;
-    if (!evidenceRef) {
+    const evidenceRef = req.body.evidenceRef || req.body.evidence || req.params.evidenceRef;
+    const sessionId = req.body.sessionId || req.params.sessionId || req.body.sessionId;
+    const ref = evidenceRef || req.body;
+    if (!ref || !ref.id) {
       return res.status(400).json({ success: false, msg: "evidenceRef is required" });
     }
-
-    const resolved = await resolveEvidenceArtifact(evidenceRef, sessionId);
+    // B7: Verify hash before resolving – reject tampered evidence with 400
+    const verification = await verifyEvidenceReference(ref, sessionId || null);
+    if (!verification.valid) {
+      return res.status(400).json({ success: false, msg: verification.reason || "Evidence verification failed" });
+    }
+    const resolved = await resolveEvidenceArtifact(ref, sessionId);
     return res.json({
       success: true,
       resolvedEvidence: resolved,
@@ -186,9 +251,84 @@ async function resolveEvidence(req, res) {
   }
 }
 
+async function resolveEvidenceById(req, res) {
+  try {
+    const { evidenceId } = req.params;
+    const { sessionId } = req.query;
+    // Search InterviewSignal evidenceRef or TimelineEvent
+    const signal = await InterviewSignal.findOne({ "evidenceRef.id": evidenceId, ...(sessionId ? { sessionId } : {}) }).lean();
+    if (signal?.evidenceRef) {
+      // B7: verify hash before resolving
+      const verification = await verifyEvidenceReference(signal.evidenceRef, signal.sessionId);
+      if (!verification.valid) {
+        return res.status(400).json({ success: false, msg: verification.reason || "Evidence verification failed" });
+      }
+      const resolved = await resolveEvidenceArtifact(signal.evidenceRef, signal.sessionId);
+      return res.json({ success: true, resolvedEvidence: resolved });
+    }
+    // Fallback to evaluation evidence search
+    const Evaluation = require("../models/Evaluation");
+    const evaluation = await Evaluation.findOne({ "competencies.evidenceRefs._id": evidenceId }).lean();
+    if (evaluation) {
+      for (const comp of evaluation.competencies || []) {
+        const match = (comp.evidenceRefs || []).find((r) => String(r._id) === String(evidenceId));
+        if (match) {
+          const type = match.refType || "TIMELINE_EVENT";
+          const offsetMs = Number.isFinite(Number(match.offsetMs)) ? Math.max(0, Math.floor(Number(match.offsetMs))) : 0;
+          const locator = {};
+          if (match.quote) locator.quote = String(match.quote).slice(0, 500);
+          if (match.note) locator.file = String(match.note).slice(0, 500);
+          const summary = match.note || "Evidence";
+          let verificationHash = match.verificationHash;
+          const isPlaceholder = !verificationHash || String(verificationHash).startsWith("pending") || verificationHash === "fallbackhash12345678";
+          if (isPlaceholder) {
+            try {
+              if (match.timelineEventId) {
+                const ref = createEvidenceReference({
+                  type,
+                  timelineEventId: String(match.timelineEventId),
+                  offsetMs,
+                  locator,
+                  summary,
+                });
+                verificationHash = ref.verificationHash;
+              } else {
+                verificationHash = computeVerificationHash(type, offsetMs, locator, summary);
+              }
+            } catch (_) {
+              verificationHash = computeVerificationHash(type, offsetMs, locator, summary);
+            }
+          }
+          const evidenceRefForResolve = {
+            id: String(match._id),
+            type,
+            timelineEventId: match.timelineEventId ? String(match.timelineEventId) : String(evaluation.session),
+            offsetMs,
+            locator,
+            summary,
+            verificationHash,
+          };
+          // B7: verify hash before resolving evaluation evidence
+          const verification = await verifyEvidenceReference(evidenceRefForResolve, evaluation.session);
+          if (!verification.valid) {
+            return res.status(400).json({ success: false, msg: verification.reason || "Evidence verification failed" });
+          }
+          const resolved = await resolveEvidenceArtifact(evidenceRefForResolve, evaluation.session);
+          return res.json({ success: true, resolvedEvidence: resolved, evidenceRef: match });
+        }
+      }
+    }
+    return res.status(404).json({ success: false, msg: "Evidence not found" });
+  } catch (err) {
+    logger.error({ err: err.message }, "Error resolving evidence by id");
+    return res.status(500).json({ success: false, msg: err.message });
+  }
+}
+
 module.exports = {
   extractSignals,
   getSignalsBySession,
   evaluateSessionSignals,
   resolveEvidence,
+  resolveEvidenceById,
 };

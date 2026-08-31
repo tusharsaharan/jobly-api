@@ -99,24 +99,56 @@ async function processCandidateFeedback({ candidateId, sourceType, sourceId, sou
   for (const item of extracted) {
     const topicInfo = TOPIC_TAXONOMY[item.topic] || { category: "CS_FUNDAMENTALS" };
 
-    // Fetch recommended study resources from RAG
+    // Precise & extensive: RAG (topK 8) + curated topic links (always) — so card is never thin
     let cachedResources = [];
     try {
       const chunks = await ragService.retrieve(item.topic, {
         namespace: "study_resource",
-        topK: 4,
+        topK: 8,
       });
 
-      cachedResources = chunks
+      const ragMapped = chunks
         .filter(c => c.sourceUrl)
-        .map(c => ({
-          title: c.sourceTitle || c.topic || item.topic,
-          url: c.sourceUrl,
-          description: c.content?.slice(0, 160) || "",
-          retrievedAt: new Date()
-        }));
+        .map(c => {
+          const s = typeof c.score === "number" ? c.score : 0;
+          const confidence = s > 0.55 ? "high" : s > 0.30 ? "medium" : s > 0.15 ? "low" : "none";
+          return {
+            title: c.sourceTitle || c.topic || item.topic,
+            url: c.sourceUrl,
+            description: c.content?.slice(0, 220) || "",
+            type: "rag",
+            score: c.score,
+            confidence,
+            relevancePct: Math.round(Math.min(0.98, s) * 100),
+            retrievedAt: new Date()
+          };
+        });
+
+      // Curated, categorized external links for this canonical topic — precise, always extensive
+      const { buildTopicStudyLinks } = require("../utils/search.utils");
+      const curated = buildTopicStudyLinks(item.topic, topicInfo.category).map(l => ({
+        ...l,
+        description: l.description?.slice(0, 220) || "",
+        retrievedAt: new Date(),
+      }));
+
+      // Merge: RAG first (precise), then curated (extensive), dedupe by url, keep top 10
+      const seen = new Set();
+      const merged = [];
+      for (const r of [...ragMapped, ...curated]) {
+        if (!r.url || seen.has(r.url)) continue;
+        seen.add(r.url);
+        merged.push(r);
+        if (merged.length >= 10) break;
+      }
+      cachedResources = merged;
     } catch (err) {
       logger.warn({ err: err.message, topic: item.topic }, "Failed to retrieve resources for weakness");
+      // Fallback to curated only so recommendation is never empty
+      try {
+        const { buildTopicStudyLinks } = require("../utils/search.utils");
+        cachedResources = buildTopicStudyLinks(item.topic, topicInfo.category).slice(0, 6).map(l => ({ ...l, retrievedAt: new Date() }));
+      } catch {}
     }
 
     try {

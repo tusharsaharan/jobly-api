@@ -1,7 +1,7 @@
 const CircuitBreaker = require("opossum");
 const logger = require("../../config/logger");
 const providerFactory = require("./providers/provider.factory");
-const { resumeExtractionSchema, jobGenerationSchema, candidateQuestionsSchema } = require("./schemas");
+const { resumeExtractionSchema, jobGenerationSchema, candidateQuestionsSchema, conversationSummarySchema } = require("./schemas");
 const { mergeJobDraft, normalizeJobPayload, normalizeSkills } = require("../../utils/jobLogic");
 
 // Circuit breaker options per provider call
@@ -91,6 +91,7 @@ You are an expert AI Resume Parser. Analyze the provided resume text and extract
 - "education": Object with { "degree": string, "college": string, "cgpa": number or null, "tier": "tier1" | "tier2" | "tier3" | "unknown" }.
 - "achievements": Array of strings (max 5).
 - "summary": A 2-3 sentence professional summary of the candidate.
+Do not use any emojis in the output.
 
 Resume Text:
 ${String(pdfText || "").slice(0, 15000)}
@@ -124,6 +125,7 @@ You are an expert recruiter assistant. Update the structured job posting from th
 - "description": Job description string.
 - "skills": Array of required skills.
 - "atsRequirements": Object with minCgpa (number), targetCollegeTier ("tier1"|"tier2"|"tier3"|"any"), minExperienceYears (number), requiredDegree (string).
+Do not use any emojis in the output.
 ${outcomePromptSection}
 Current draft:
 ${JSON.stringify(currentDraft)}
@@ -142,7 +144,7 @@ ${String(userPrompt || "").slice(0, 4000)}
   async predictCandidateQuestions(jobPayload = {}, options = {}) {
     const prompt = `
 You are a senior talent acquisition strategist. Analyze this job posting and identify 4-5 high-signal questions that qualified candidates will ask before or during interviews.
-Generate practical, transparent default answers based on the job details provided.
+Generate practical, transparent default answers based on the job details provided. Do not use emojis.
 
 Job Details:
 Title: ${jobPayload.title || "Software Role"}
@@ -168,6 +170,51 @@ Return strictly as JSON with this schema:
 
     const result = await this.executeWithCascade(prompt, candidateQuestionsSchema, options);
     return result.data?.questions || [];
+  }
+
+  /**
+   * Summarize a private conversation thread (Instagram-style AI summary)
+   */
+  async summarizeConversation({ messages = [], participants = {}, jobContext = {}, maxMessages = 200 } = {}, options = {}) {
+    const trimmed = Array.isArray(messages) ? messages.slice(-maxMessages) : [];
+    const transcript = trimmed
+      .map((m) => {
+        const name = typeof m?.sender === "object" ? m.sender?.name || m.sender?.email : null;
+        const label = name ? `${name}` : (m?.from || "Participant");
+        return `${label}: ${String(m?.text || "").trim()}`;
+      })
+      .join("\n");
+
+    const prompt = `
+You are a helpful conversation assistant. Summarize the following private message thread like Instagram's chat summary.
+Return strictly as JSON with this schema:
+{
+  "summary": "A single concise sentence capturing the overall state and outcome of the conversation.",
+  "highlights": ["3 to 5 short bullet points covering key topics, decisions, scheduling, and action items."]
+}
+
+Rules:
+- Stay strictly faithful to the transcript. Never invent facts, dates, or commitments that are not present.
+- Cover what has been discussed, agreed, requested, and any pending next steps.
+- Keep each highlight under ~12 words.
+- Do not use emojis in the output.
+
+Participants:
+${Object.entries(participants).map(([k, v]) => `- ${k}: ${v || ""}`).join("\n") || "Unknown participants"}
+
+Job Context:
+${jobContext.title ? `Title: ${jobContext.title}` : ""}${jobContext.company ? `\nCompany: ${jobContext.company}` : ""}
+
+Transcript (oldest to newest):
+${transcript || "(no messages)"}
+`;
+
+    const result = await this.executeWithCascade(prompt, conversationSummarySchema, {
+      preferredProvider: "gemini",
+      temperature: 0.2,
+      ...options,
+    });
+    return result.data;
   }
 }
 

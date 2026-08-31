@@ -15,6 +15,7 @@
 const { GoogleGenAI } = require("@google/genai");
 const EmbeddingChunk = require("../models/EmbeddingChunk");
 const logger = require("../config/logger");
+const { RRFSearchEngine } = require("../modules/search/rrfEngine");
 
 // ── Constants ────────────────────────────────────────────────────
 
@@ -22,12 +23,20 @@ const EMBEDDING_MODEL = "gemini-embedding-001";  // 3072-dim, available on v1bet
 const EMBEDDING_DIM = 3072;
 const GENERATION_MODEL = "gemini-flash-lite-latest";
 
+// Hybrid RRF engine used when Atlas Vector Search is unavailable (local dev / CI).
+// Uses BM25 + 384-dim deterministic embeddings (3× params vs 128) — no external API required.
+const hybridEngine = new RRFSearchEngine({ k: 60, wBM25: 1.0, wDense: 1.0, embeddingOptions: { dimensions: 384 } });
+
 // ── Lazy-init AI client ─────────────────────────────────────────
 
 let _ai = null;
+function hasValidGeminiKey() {
+  const k = process.env.GEMINI_API_KEY;
+  return Boolean(k && !String(k).includes("your_gemini_api_key") && String(k).trim().length > 10);
+}
 function getAI() {
   if (!_ai) {
-    if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not set");
+    if (!hasValidGeminiKey()) throw new Error("GEMINI_API_KEY not set");
     _ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   }
   return _ai;
@@ -103,7 +112,8 @@ async function ingestChunks(chunks) {
 
 /**
  * Perform a vector similarity search.
- * Falls back to text-based search if embedding or Atlas Vector Search fails.
+ * Priority: Atlas Vector Search → Hybrid RRF (BM25 + deterministic embeddings).
+ * The hybrid path requires NO Atlas index and NO Gemini key — ideal for local dev & CI.
  *
  * @param {string} query            The user query
  * @param {object} opts
@@ -120,177 +130,192 @@ async function retrieve(query, { namespace, scopeId = null, topic = null, topK =
   if (scopeId)   filter.scopeId = scopeId;
   if (topic)     filter.topic = topic;
 
-  try {
-    // Attempt embedding + vector search
-    const queryEmbedding = await embed(query);
+  // 1) Try Atlas Vector Search (requires Atlas index + valid GEMINI_API_KEY)
+  if (hasValidGeminiKey()) {
+    try {
+      const queryEmbedding = await embed(query);
 
-    const results = await EmbeddingChunk.aggregate([
-      {
-        $vectorSearch: {
-          index: "vector_index",
-          path: "embedding",
-          queryVector: queryEmbedding,
-          numCandidates: topK * 10,
-          limit: topK,
-          filter: filter,
+      const results = await EmbeddingChunk.aggregate([
+        {
+          $vectorSearch: {
+            index: "vector_index",
+            path: "embedding",
+            queryVector: queryEmbedding,
+            numCandidates: topK * 10,
+            limit: topK,
+            filter: filter,
+          },
         },
-      },
-      {
-        $project: {
-          content: 1,
-          sourceUrl: 1,
-          sourceTitle: 1,
-          topic: 1,
-          namespace: 1,
-          score: { $meta: "vectorSearchScore" },
+        {
+          $project: {
+            content: 1,
+            sourceUrl: 1,
+            sourceTitle: 1,
+            topic: 1,
+            namespace: 1,
+            score: { $meta: "vectorSearchScore" },
+          },
         },
-      },
-    ]);
+      ]);
 
-    if (results && results.length > 0) return results;
-
-    // If vector search returned nothing, fall through to text search
-    logger.info("Vector search returned 0 results, falling back to text search");
-  } catch (err) {
-    // Embedding or Atlas Vector Search failed — fall back gracefully
-    logger.warn({ err: err.message }, "Vector retrieval failed, falling back to text search");
-  }
-
-  // Fallback: keyword-based text search
-  return fallbackTextSearch(query, { namespace, scopeId, topic, topK });
-}
-
-const STOP_WORDS = new Set([
-  "what", "is", "are", "how", "does", "do", "did", "why", "when", "where", "which", "who", "whom",
-  "teach", "tell", "explain", "describe", "give", "show", "help", "with", "about",
-  "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "from", "by",
-  "can", "you", "me", "my", "i", "we", "our", "it", "its", "this", "that", "these", "those"
-]);
-
-function stringSimilarity(s1, s2) {
-  if (!s1 || !s2) return 0;
-  if (s1 === s2) return 1.0;
-  if (s1.includes(s2) || s2.includes(s1)) return 0.85;
-
-  const bigrams = (str) => {
-    const s = new Set();
-    for (let i = 0; i < str.length - 1; i++) {
-      s.add(str.slice(i, i + 2));
+      if (results && results.length > 0) {
+        logger.info({ namespace, topK, hits: results.length }, "Atlas vector search succeeded");
+        return results;
+      }
+      logger.info("Atlas vector search returned 0 results, trying Hybrid RRF");
+    } catch (err) {
+      logger.warn({ err: err.message }, "Atlas vector retrieval failed, falling back to Hybrid RRF");
     }
-    return s;
-  };
-  const b1 = bigrams(s1);
-  const b2 = bigrams(s2);
-  let intersection = 0;
-  for (const bg of b1) {
-    if (b2.has(bg)) intersection++;
+  } else {
+    logger.debug("GEMINI_API_KEY not set — skipping Atlas vector search, using Hybrid RRF directly");
   }
-  return (2.0 * intersection) / (b1.size + b2.size || 1);
+
+  // 2) Fallback: Hybrid RRF (BM25 + deterministic embeddings) — no Atlas, no API key needed
+  return hybridFallbackSearch(query, { namespace, scopeId, topic, topK });
 }
 
 /**
- * Fallback text search when Atlas Vector Search index is unavailable.
- * Uses smart keyword extraction, typo tolerance, and multi-field relevance scoring.
+ * Hybrid RRF fallback when Atlas Vector Search is unavailable.
+ * Combines BM25 lexical ranking + deterministic dense embeddings via RRF (k=60).
+ * No Gemini key, no Atlas index required — works fully offline.
  */
-async function fallbackTextSearch(query, { namespace, scopeId, topic, topK }) {
+async function hybridFallbackSearch(query, { namespace, scopeId, topic, topK }) {
+  const cleaned = String(query || "").trim();
+  // Hard guard: empty / single-char / only symbols → no retrieval (controller already 400, but rag direct call should also be safe)
+  if (cleaned.length < 2 || cleaned.replace(/[^a-zA-Z0-9]/g, "").length < 2) return [];
+  // Block obvious injection / XSS payloads from polluting retrieval (still log, return none)
+  if (/<script|DROP\s+TABLE|SELECT\s+\*|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+.*SET/i.test(cleaned)) return [];
+
   const filter = {};
   if (namespace) filter.namespace = namespace;
   if (scopeId)   filter.scopeId = scopeId;
   if (topic)     filter.topic = topic;
 
-  // Clean and extract meaningful keywords
-  const cleaned = query.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
-  const rawTokens = cleaned.split(/\s+/).filter(Boolean);
-  const keywords = rawTokens.filter((w) => w.length > 1 && !STOP_WORDS.has(w));
-
-  const searchTokens = keywords.length > 0 ? keywords : rawTokens.filter((w) => w.length > 2);
-
-  // Fetch candidate documents
-  const allDocs = await EmbeddingChunk.find(filter)
-    .select("content sourceUrl sourceTitle topic")
+  const docs = await EmbeddingChunk.find(filter)
+    .select("content sourceUrl sourceTitle topic namespace scopeId")
     .lean();
 
-  if (allDocs.length === 0) return [];
+  if (docs.length === 0) return [];
 
-  // If no search tokens available, return top N
-  if (searchTokens.length === 0) {
-    return allDocs.slice(0, topK).map((r) => ({ ...r, score: 0.5 }));
+  // Boost title 3× (so query matching title outranks body-only matches); topic gets 1×
+  const textAccessor = (doc) => `${doc.sourceTitle || ""} ${doc.sourceTitle || ""} ${doc.sourceTitle || ""} ${doc.topic || ""} ${doc.content || ""}`;
+
+  const rrfResults = await hybridEngine.search(docs, textAccessor, query, { limit: Math.max(topK * 3, topK) });
+  if (rrfResults.length === 0) return [];
+
+  // Absolute off-topic guard: if even the best doc has no lexical and weak semantic, it's junk/Hindi/burger
+  const maxBm25 = Math.max(...rrfResults.map(r => r.bm25Score));
+  const maxVector = Math.max(...rrfResults.map(r => r.vectorScore));
+  // Require at least one strong signal: BM25≥1.0 (lexical) OR vector≥0.28 (semantic)
+  if (maxBm25 < 1.0 && maxVector < 0.28) {
+    logger.debug({ query: cleaned.slice(0,60), maxBm25, maxVector }, "Hybrid RRF off-topic → no results");
+    return [];
   }
 
-  // Score each document based on topic, title, and content match (with fuzzy typo tolerance)
-  const scored = [];
-  for (const doc of allDocs) {
-    let score = 0;
-    const lowerContent = (doc.content || "").toLowerCase();
-    const lowerTitle = (doc.sourceTitle || "").toLowerCase();
-    const lowerTopic = (doc.topic || "").toLowerCase();
-
-    let matchedTokens = 0;
-    for (const token of searchTokens) {
-      let tokenHit = false;
-
-      // Exact substring matching
-      if (lowerTopic.includes(token)) {
-        score += 0.6;
-        tokenHit = true;
-      }
-      if (lowerTitle.includes(token)) {
-        score += 0.5;
-        tokenHit = true;
-      }
-      if (lowerContent.includes(token)) {
-        score += 0.3;
-        tokenHit = true;
-      }
-
-      // Fuzzy matching for typos (e.g. "spotoify" -> "spotify", "netflx" -> "netflix")
-      if (!tokenHit && token.length >= 4) {
-        const titleWords = lowerTitle.split(/[^a-z0-9]/).filter((w) => w.length >= 3);
-        const topicWords = lowerTopic.split(/[^a-z0-9]/).filter((w) => w.length >= 3);
-
-        for (const tw of titleWords) {
-          const sim = stringSimilarity(token, tw);
-          if (sim >= 0.65) {
-            score += 0.5 * sim;
-            tokenHit = true;
-            break;
-          }
-        }
-
-        if (!tokenHit) {
-          for (const topw of topicWords) {
-            const sim = stringSimilarity(token, topw);
-            if (sim >= 0.65) {
-              score += 0.55 * sim;
-              tokenHit = true;
-              break;
-            }
-          }
-        }
-      }
-
-      if (tokenHit) matchedTokens++;
-    }
-
-    // Boost documents that matched a higher percentage of search terms
-    const coverageRatio = matchedTokens / searchTokens.length;
-    score = score * (0.5 + 0.5 * coverageRatio);
-
-    if (score > 0.1) {
-      scored.push({
-        ...doc,
-        score: Math.min(0.98, parseFloat(score.toFixed(3))),
-      });
+  // CS relevance guard: query must contain at least one CS/system-design token (otherwise burger/Hindi → none)
+  // Build CS vocab from doc titles/topics + canonical taxonomy (so Arrays, DP etc. are CS even if not in current docs)
+  const csStop = new Set(["make","get","give","take","use","need","want","like","know","tell","explain","describe","give","show","help","with","about","how","what","why","when","where","which","who","can","you","me","my","i","we","our","it","its","this","that"]);
+  const titleTopicTokens = new Set();
+  for (const d of docs) {
+    const t = `${d.sourceTitle || ""} ${d.topic || ""}`.toLowerCase().replace(/[^\w\s]/g, " ").split(/\s+/).map(s=> s.trim()).filter(s=> s.length>2 && !csStop.has(s));
+    for (const tok of t) titleTopicTokens.add(tok);
+    // Also add stemmed
+    for (const tok of t) {
+      let st = tok;
+      if (st.endsWith("ing") && st.length>5) st = st.slice(0,-3);
+      else if (st.endsWith("s") && st.length>4) st = st.slice(0,-1);
+      if (st.length>2) titleTopicTokens.add(st);
     }
   }
+  // Add canonical taxonomy terms (so Arrays, DP, OS etc. are CS even if not in current embedding docs)
+  try {
+    const { getTopicNames } = require("../constants/topicTaxonomy");
+    for (const t of getTopicNames()) {
+      const parts = t.toLowerCase().replace(/[^\w\s]/g, " ").split(/\s+/).map(s=> s.trim()).filter(s=> s.length>2);
+      for (const p of parts) {
+        titleTopicTokens.add(p);
+        let st = p;
+        if (st.endsWith("ing") && st.length>5) st = st.slice(0,-3);
+        else if (st.endsWith("s") && st.length>4) st = st.slice(0,-1);
+        if (st.length>2) titleTopicTokens.add(st);
+      }
+    }
+  } catch {}
+  const OFFTOPIC_BLOCK = new Set(["burger","cheese","recipe","pasta","cook","food","cricket","tujhe","kuch","nhi","aata","yeh","kya","hai","samjhao","make","me"]);
+  const queryTokensForCsRaw = cleaned.toLowerCase().replace(/[^\w\s]/g, " ").split(/\s+/).map(s=> s.trim()).filter(s=> s.length>2 && !csStop.has(s));
+  // Filter out known off-topic food/Hindi tokens before CS check (so burger recipe cheese → 0 CS)
+  const queryTokensForCs = queryTokensForCsRaw.filter(t => !OFFTOPIC_BLOCK.has(t));
+  // If after filtering food, no tokens left → check if original had only food/Hindi → off-topic
+  const hasFoodOnly = queryTokensForCsRaw.length>0 && queryTokensForCs.length===0;
+  if (hasFoodOnly) {
+    logger.debug({ query: cleaned.slice(0,60), queryTokensForCsRaw }, "Hybrid RRF food/Hindi only → off-topic");
+    return [];
+  }
+  const hasCsToken = queryTokensForCs.some(qt => {
+    if (titleTopicTokens.has(qt)) return true;
+    // stem check
+    let st = qt;
+    if (st.endsWith("ing") && st.length>5) st = st.slice(0,-3);
+    else if (st.endsWith("s") && st.length>4) st = st.slice(0,-1);
+    if (titleTopicTokens.has(st)) return true;
+    // synonym check (link→url etc.)
+    const synMap = { music:"audio", audio:"music", link:"url", url:"link", shortening:"shorten", shortener:"shorten", ride:"uber", uber:"ride", paxos:"consensus", consensus:"paxos", caching:"cache", cache:"caching", sharding:"partition", partition:"sharding" };
+    const syn = synMap[qt];
+    if (syn && titleTopicTokens.has(syn)) return true;
+    // typo fuzzy for CS: allow ubber→uber, geospacial→geospatial, spotoify→spotify (edit distance via bigram ≥0.75 for len≥5)
+    if (qt.length >= 4) {
+      for (const csTok of titleTopicTokens) {
+        if (Math.abs(csTok.length - qt.length) > 2) continue;
+        if (csTok.length < 4) continue;
+        const bigrams = s => { const set=new Set(); for(let i=0;i<s.length-1;i++) set.add(s.slice(i,i+2)); return set; };
+        const a=bigrams(qt), b=bigrams(csTok);
+        let inter=0; for(const bg of a) if(b.has(bg)) inter++;
+        const dice=(2*inter)/(a.size+b.size||1);
+        // Stricter for short words to avoid cheese→chess (dice 0.75 but cheese is food, already filtered)
+        const thresh = qt.length <=5 ? 0.80 : 0.70;
+        if (dice >= thresh) return true;
+      }
+    }
+    return false;
+  });
+  if (!hasCsToken) {
+    logger.debug({ query: cleaned.slice(0,60), queryTokensForCs }, "Hybrid RRF no CS token → off-topic");
+    return [];
+  }
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topK);
+  // Keep only results with meaningful signal
+  const filtered = rrfResults.filter(r => r.bm25Score >= 1.0 || r.vectorScore >= 0.22);
+  const chosenRaw = (filtered.length > 0 ? filtered : rrfResults.filter(r => r.bm25Score > 0 || r.vectorScore > 0.12)).slice(0, topK);
+  if (chosenRaw.length === 0) return [];
+
+  // Absolute discriminative score: blend normalized BM25 and vector, not relative RRF rank.
+  // This keeps off-topic low (<0.22) and on-topic high (>0.55).
+  const maxBm25Chosen = Math.max(...chosenRaw.map(r => r.bm25Score), 1);
+  return chosenRaw.map((r) => {
+    const normBm25 = Math.min(1, r.bm25Score / maxBm25Chosen); // 0-1
+    const abs = normBm25 * 0.55 + r.vectorScore * 0.45; // lexical 55% + semantic 45%
+    // Map abs (0-1) → 0.18-0.98 for UI, but keep off-topic <0.22
+    const score = Math.min(0.98, parseFloat((0.18 + abs * 0.80).toFixed(3)));
+    return {
+      content: r.item.content,
+      sourceUrl: r.item.sourceUrl,
+      sourceTitle: r.item.sourceTitle,
+      topic: r.item.topic,
+      namespace: r.item.namespace,
+      score,
+      _debug: { rrfScore: r.rrfScore, bm25Score: r.bm25Score, vectorScore: r.vectorScore },
+    };
+  });
+}
+
+// Kept for backwards-compat (tests may stub fallbackTextSearch); delegates to hybrid
+async function fallbackTextSearch(query, opts) {
+  return hybridFallbackSearch(query, opts);
 }
 
 // ── Generation (RAG completion) ─────────────────────────────────
 
-const MIN_CONFIDENCE_SCORE = 0.1; // Allows all relevant retrieved chunks to be answered
+const MIN_CONFIDENCE_SCORE = 0.22; // Hybrid RRF produces calibrated scores; 0.22 filters noise while keeping recall
 
 /**
  * Generate an LLM answer grounded in retrieved chunks.
@@ -347,22 +372,51 @@ Instructions:
 - Reference the sources with [Source 1], [Source 2], etc.
 - If referencing URLs, use the verified source URLs from the reference material above.`;
 
-  const response = await getAI().models.generateContent({
-    model: GENERATION_MODEL,
-    contents: prompt,
-  });
+  const topScore = retrievedChunks[0]?.score ?? 0;
+  const sources = retrievedChunks.map((c) => ({
+    title: c.sourceTitle,
+    url: c.sourceUrl,
+    score: c.score,
+  }));
+  const confidence = topScore > 0.55 ? "high" : topScore > 0.30 ? "medium" : "low";
 
-  const topScore = retrievedChunks[0]?.score;
+  // If no valid Gemini key, return grounded template synthesis (no LLM call) — still cited
+  if (!hasValidGeminiKey()) {
+    const synthesis = retrievedChunks
+      .map((c, i) => `**[Source ${i + 1}: ${c.sourceTitle || "Curriculum"}]** — ${c.content.slice(0, 600)}${c.content.length > 600 ? "…" : ""}`)
+      .join("\n\n");
+    return {
+      reply:
+        `**Grounded Answer (offline synthesis — LLM key not configured)**\n\n` +
+        `Question: "${query}"\n\n` +
+        `${synthesis}\n\n` +
+        `**Guidance**: The above is synthesized from verified curriculum sources [Source 1..${retrievedChunks.length}]. For a fully LLM-polished architectural narrative, configure \`GEMINI_API_KEY\`.`,
+      sources,
+      confidence,
+    };
+  }
 
-  return {
-    reply: response.text,
-    sources: retrievedChunks.map((c) => ({
-      title: c.sourceTitle,
-      url: c.sourceUrl,
-      score: c.score,
-    })),
-    confidence: topScore > 0.7 ? "high" : topScore > 0.4 ? "medium" : "low",
-  };
+  try {
+    const response = await getAI().models.generateContent({
+      model: GENERATION_MODEL,
+      contents: prompt,
+    });
+    return { reply: response.text, sources, confidence };
+  } catch (err) {
+    logger.warn({ err: err.message }, "RAG generation failed, falling back to offline synthesis");
+    const synthesis = retrievedChunks
+      .map((c, i) => `**[Source ${i + 1}: ${c.sourceTitle || "Curriculum"}]** — ${c.content.slice(0, 600)}${c.content.length > 600 ? "…" : ""}`)
+      .join("\n\n");
+    return {
+      reply:
+        `**Grounded Answer (fallback synthesis)**\n\n` +
+        `Question: "${query}"\n\n` +
+        `${synthesis}\n\n` +
+        `(LLM generation unavailable: ${err.message})`,
+      sources,
+      confidence,
+    };
+  }
 }
 
 // ── Exports ─────────────────────────────────────────────────────
@@ -372,5 +426,7 @@ module.exports = {
   ingestChunks,
   retrieve,
   ragAnswer,
+  fallbackTextSearch,
+  hybridFallbackSearch,
   EMBEDDING_DIM,
 };

@@ -50,5 +50,9 @@ applicationSchema.index({ job: 1, seeker: 1 }, { unique: true });
 // Fast recruiter pipeline lookups
 applicationSchema.index({ recruiter: 1, status: 1 });
 applicationSchema.index({ seeker: 1, createdAt: -1 });
+applicationSchema.index({ seeker: 1, status: 1, createdAt: -1 });
+applicationSchema.index({ recruiter: 1, status: 1, createdAt: -1 });
+applicationSchema.index({ job: 1, atsScore: -1 });
+applicationSchema.index({ job: 1, status: 1 });
 
 module.exports = mongoose.model("Application", applicationSchema);

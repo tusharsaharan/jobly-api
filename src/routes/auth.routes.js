@@ -6,6 +6,6 @@ const router = express.Router();
 
 router.post("/register", rateLimitMiddleware(authLimiter, (req) => req.ip), register);
 router.post("/login", rateLimitMiddleware(authLimiter, (req) => req.ip), login);
-router.post("/refresh-token", refreshToken);
+router.post("/refresh-token", rateLimitMiddleware(authLimiter, (req) => req.ip), refreshToken);
 
 module.exports = router;

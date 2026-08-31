@@ -223,15 +223,16 @@ async function main() {
         embedding: new Array(3072).fill(0),
       }));
       await EmbeddingChunk.insertMany(fallbackDocs);
-      console.log(`Saved ${fallbackDocs.length} chunks with fallback embeddings.`);
+      console.log(`Saved ${fallbackDocs.length} chunks with zero embeddings (Hybrid RRF will still work offline).`);
     }
   } else {
+    // No Gemini key: store zero vectors of correct dim (Hybrid RRF fallback does not use them)
     const fallbackDocs = allChunks.map((c) => ({
       ...c,
-      embedding: new Array(768).fill(0),
+      embedding: new Array(3072).fill(0),
     }));
     await EmbeddingChunk.insertMany(fallbackDocs);
-    console.log(`Saved ${fallbackDocs.length} chunks with fallback embeddings.`);
+    console.log(`Saved ${fallbackDocs.length} chunks with zero embeddings (GEMINI_API_KEY not set — Hybrid RRF fallback active).`);
   }
 
   // Also seed SystemDesignArticles

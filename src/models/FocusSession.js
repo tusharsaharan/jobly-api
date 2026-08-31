@@ -44,6 +44,9 @@ const focusSessionSchema = new mongoose.Schema(
     quizData: {
       type: mongoose.Schema.Types.Mixed, // stores generated AI quiz questions
     },
+    submittedAnswers: {
+      type: mongoose.Schema.Types.Mixed, // audit trail: client answers for server-verified scoring
+    },
     startTime: {
       type: Date,
       default: Date.now,

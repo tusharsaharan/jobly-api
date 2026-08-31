@@ -4,12 +4,14 @@ const InterviewSession = require("../models/InterviewSession");
 const TimelineEvent = require("../models/TimelineEvent");
 const CodeCheckpoint = require("../models/CodeCheckpoint");
 const WhiteboardSnapshot = require("../models/WhiteboardSnapshot");
+const { createEvidenceReference, computeVerificationHash } = require("../modules/signals/evidenceEngine");
 
 /**
  * Helper to verify recruiter permission for session
  */
 async function authorizeRecruiter(sessionId, user) {
-  const session = await InterviewSession.findById(sessionId)
+  const tenantFilter = user?.tenantId ? { tenantId: user.tenantId } : {};
+  const session = await InterviewSession.findOne({ _id: sessionId, ...tenantFilter })
     .populate("seeker", "name email")
     .populate("recruiter", "name email")
     .populate("job");
@@ -56,7 +58,8 @@ function toCandidateFeedback(evaluation) {
 }
 
 async function authorizeCandidate(sessionId, user) {
-  const session = await InterviewSession.findById(sessionId)
+  const tenantFilter = user?.tenantId ? { tenantId: user.tenantId } : {};
+  const session = await InterviewSession.findOne({ _id: sessionId, ...tenantFilter })
     .populate("job", "title company")
     .populate("recruiter", "name");
 
@@ -92,11 +95,15 @@ exports.createEvaluation = async (req, res) => {
       aiInsights = null,
     } = req.body;
 
+    // Authorize first to ensure 403 for non-recruiters even if payload invalid (test expects 403)
+    const session = await authorizeRecruiter(sessionId, req.user);
+
     if (!overallRating || !decision) {
       return res.status(400).json({ msg: "overallRating and decision are required." });
     }
-
-    const session = await authorizeRecruiter(sessionId, req.user);
+    if (!Array.isArray(competencies) || competencies.length === 0) {
+      return res.status(400).json({ msg: "At least one competency with evidence is required." });
+    }
 
     // Validate evidence references
     for (const comp of competencies) {
@@ -132,29 +139,47 @@ exports.createEvaluation = async (req, res) => {
       }
     }
 
-    // Upsert evaluation record
-    let evaluation = await Evaluation.findOne({ session: session._id });
-    if (evaluation) {
-      evaluation.overallRating = overallRating;
-      evaluation.decision = decision;
-      evaluation.competencies = competencies;
-      evaluation.strengths = strengths;
-      evaluation.weaknesses = weaknesses;
-      evaluation.privateNotes = privateNotes;
-      if (aiInsights) evaluation.aiInsights = aiInsights;
-      await evaluation.save();
-    } else {
-      evaluation = await Evaluation.create({
-        session: session._id,
-        evaluator: req.user._id,
-        overallRating,
-        decision,
-        competencies,
-        strengths,
-        weaknesses,
-        privateNotes,
-        aiInsights,
-      });
+    // Upsert evaluation record — per-evaluator unique, prevents overwrite across interviewers
+    let evaluation;
+    try {
+      evaluation = await Evaluation.findOneAndUpdate(
+        { session: session._id, evaluator: req.user._id },
+        {
+          $set: {
+            overallRating,
+            decision,
+            competencies,
+            strengths,
+            weaknesses,
+            privateNotes,
+            ...(aiInsights ? { aiInsights } : {}),
+            evaluator: req.user._id,
+          },
+        },
+        { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+      );
+    } catch (upsertErr) {
+      // Fallback for duplicate key race: retry with findOneAndUpdate
+      if (upsertErr.code === 11000) {
+        evaluation = await Evaluation.findOneAndUpdate(
+          { session: session._id, evaluator: req.user._id },
+          {
+            $set: {
+              overallRating,
+              decision,
+              competencies,
+              strengths,
+              weaknesses,
+              privateNotes,
+              ...(aiInsights ? { aiInsights } : {}),
+              evaluator: req.user._id,
+            },
+          },
+          { new: true, runValidators: true }
+        );
+      } else {
+        throw upsertErr;
+      }
     }
 
     // Auto-complete session if live or waiting
@@ -251,9 +276,33 @@ exports.updateEvaluation = async (req, res) => {
     const { sessionId } = req.params;
     const session = await authorizeRecruiter(sessionId, req.user);
 
+    const { overallRating, decision, competencies, feedback } = req.body;
+    // Validate competencies if provided — must have evidence, must reference existing timeline events
+    if (competencies !== undefined) {
+      if (!Array.isArray(competencies) || competencies.length === 0) {
+        return res.status(400).json({ msg: "competencies must be non-empty array with evidence" });
+      }
+      for (const comp of competencies) {
+        if (!comp.evidenceRefs || comp.evidenceRefs.length === 0) {
+          return res.status(400).json({ msg: `Competency '${comp.category || comp.pillar}' must have at least one evidence reference` });
+        }
+        for (const ref of comp.evidenceRefs) {
+          if (ref.timelineEventId) {
+            const exists = await TimelineEvent.exists({ _id: ref.timelineEventId, session: session._id });
+            if (!exists) return res.status(400).json({ msg: `Invalid evidence link: TimelineEvent ${ref.timelineEventId} not found` });
+          }
+        }
+      }
+    }
+    const updatePayload = {};
+    if (overallRating !== undefined) updatePayload.overallRating = overallRating;
+    if (decision !== undefined) updatePayload.decision = decision;
+    if (competencies !== undefined) updatePayload.competencies = competencies;
+    if (feedback !== undefined) updatePayload.feedback = feedback;
+
     const updated = await Evaluation.findOneAndUpdate(
-      { session: session._id },
-      { $set: req.body },
+      { session: session._id, evaluator: req.user._id },
+      { $set: updatePayload },
       { new: true, runValidators: true }
     );
 
@@ -265,6 +314,116 @@ exports.updateEvaluation = async (req, res) => {
   } catch (err) {
     logger.error({ err: err.message }, "Error updating evaluation");
     return res.status(err.status || 500).json({ msg: err.message || "Failed updating evaluation" });
+  }
+};
+
+/**
+ * POST /api/evaluations/:sessionId/competencies
+ * Strict 4-pillar competency submission with evidence — plan hierarchy Phase 5
+ */
+exports.createCompetencyEvaluation = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { competencies, overallRating, decision, strengths, weaknesses, privateNotes } = req.body;
+
+    if (!competencies || !Array.isArray(competencies)) {
+      return res.status(400).json({ msg: "competencies array (4 pillars) is required" });
+    }
+
+    // Validate against canonical Signal contracts
+    let contractModule = null;
+    try {
+      contractModule = require("@jobly/contracts");
+    } catch {}
+    if (contractModule?.CompetencyRatingSchema) {
+      const arrSchema = contractModule.CompetencyRatingSchema.array().min(4).max(4);
+      const parsed = arrSchema.safeParse(competencies);
+      if (!parsed.success) {
+        return res.status(400).json({ msg: "Invalid competency payload", errors: parsed.error.issues });
+      }
+      // Enforce deterministic engine version if provided
+      if (req.body.schemaVersion && req.body.schemaVersion !== contractModule.SIGNAL_ENGINE_VERSION) {
+        return res.status(400).json({ msg: `schemaVersion must be ${contractModule.SIGNAL_ENGINE_VERSION}` });
+      }
+    }
+
+    // Map contract pillars to Evaluation storage (preserve pillar enum) — generate real verificationHash via evidenceEngine
+    const mappedCompetencies = competencies.map((c) => ({
+      category: c.pillar ? String(c.pillar) : String(c.category || "unknown"),
+      score: c.score,
+      notes: c.rationale || c.notes || "",
+      evidenceRefs: (c.evidenceReferences || c.evidenceRefs || []).map((er) => {
+        const refType = er.type || er.refType || "TIMELINE_EVENT";
+        const timelineEventId = er.timelineEventId || er.timelineEvent || null;
+        const checkpointId = er.checkpointId || null;
+        const snapshotId = er.snapshotId || null;
+        const quote = er.locator?.quote || er.quote || null;
+        const note = er.summary || er.note || "";
+        const offsetMs = Number.isFinite(Number(er.offsetMs)) ? Math.max(0, Math.floor(Number(er.offsetMs))) : 0;
+        // Build clean locator for hash computation (mirrors evidenceEngine cleanLocator)
+        const locatorForHash = {};
+        if (er.locator?.file || er.file) locatorForHash.file = er.locator?.file || er.file;
+        if (quote) locatorForHash.quote = String(quote).slice(0, 500);
+        if (er.locator?.speaker) locatorForHash.speaker = er.locator.speaker;
+        if (er.locator?.startLine != null) locatorForHash.startLine = Number(er.locator.startLine);
+        if (er.locator?.endLine != null) locatorForHash.endLine = Number(er.locator.endLine);
+        if (er.locator?.snapshotVersion != null) locatorForHash.snapshotVersion = er.locator.snapshotVersion;
+        if (er.locator?.testCaseIndex != null) locatorForHash.testCaseIndex = er.locator.testCaseIndex;
+        if (er.locator?.eventType) locatorForHash.eventType = er.locator.eventType;
+        let verificationHash = er.verificationHash;
+        const isPlaceholder = !verificationHash || String(verificationHash).startsWith("pending-server-hash") || verificationHash === "fallbackhash12345678" || String(verificationHash).startsWith("pending");
+        if (isPlaceholder) {
+          try {
+            if (timelineEventId) {
+              const ref = createEvidenceReference({
+                type: refType,
+                timelineEventId: String(timelineEventId),
+                offsetMs,
+                locator: locatorForHash,
+                summary: note || "Evidence",
+              });
+              verificationHash = ref.verificationHash;
+            } else {
+              verificationHash = computeVerificationHash(refType, offsetMs, locatorForHash, note || "Evidence");
+            }
+          } catch (_) {
+            verificationHash = computeVerificationHash(refType, offsetMs, locatorForHash, note || "Evidence");
+          }
+        }
+        return {
+          refType,
+          timelineEventId,
+          checkpointId,
+          snapshotId,
+          quote,
+          note,
+          offsetMs,
+          verificationHash,
+        };
+      }),
+      pillar: c.pillar,
+      confidence: c.confidence,
+      signalsObserved: c.signalsObserved || [],
+    }));
+
+    // Delegate to existing createEvaluation logic
+    req.body.competencies = mappedCompetencies;
+    if (!req.body.overallRating && overallRating === undefined) {
+      // Derive overallRating from average pillar score (1-5)
+      const avg = mappedCompetencies.reduce((s, x) => s + (x.score || 3), 0) / mappedCompetencies.length;
+      req.body.overallRating = Math.max(1, Math.min(5, Math.round(avg)));
+    }
+    if (!req.body.decision && decision === undefined) {
+      req.body.decision = "HIRE";
+    }
+    if (strengths) req.body.strengths = strengths;
+    if (weaknesses) req.body.weaknesses = weaknesses;
+    if (privateNotes !== undefined) req.body.privateNotes = privateNotes;
+
+    return exports.createEvaluation(req, res);
+  } catch (err) {
+    logger.error({ err: err.message }, "Error in competency evaluation");
+    return res.status(err.status || 500).json({ msg: err.message || "Failed competency evaluation" });
   }
 };
 

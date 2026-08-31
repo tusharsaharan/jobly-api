@@ -27,18 +27,25 @@ exports.uploadResume = async (req, res) => {
       return res.status(400).json({ msg: "No file uploaded" });
     }
 
-    // Verify magic bytes (prevent MIME spoofing / executable upload attacks)
-    if (req.file.originalname !== "mock-resume.pdf" && !isPdfMagicBytes(req.file.buffer)) {
+    // Verify magic bytes (prevent MIME spoofing / executable upload attacks) - always validate regardless of filename
+    if (!isPdfMagicBytes(req.file.buffer)) {
       return res.status(400).json({ msg: "Uploaded file is not a valid PDF document." });
     }
 
     const uploadId = `upl-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
     const sha256 = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
 
-    // Create durable ResumeUpload state record
+    // Duplicate SHA dedupe: check existing upload with same sha256 for this user
+    const existingDuplicate = await ResumeUpload.findOne({ sha256, userId: req.user._id });
+    if (existingDuplicate) {
+      return res.status(409).json({ msg: "Duplicate resume detected - identical file already uploaded", existingUploadId: existingDuplicate.uploadId, sha256 });
+    }
+
+    // Create durable ResumeUpload state record (owner mirrors userId for {sha256, owner} unique index)
     await ResumeUpload.create({
       uploadId,
       userId: req.user._id,
+      owner: req.user._id,
       fileName: req.file.originalname,
       fileSize: req.file.size,
       sha256,

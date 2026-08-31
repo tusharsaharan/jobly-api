@@ -1,6 +1,10 @@
 module.exports = {
   testEnvironment: 'node',
+  setupFiles: ["<rootDir>/tests/setup-env.js"],
   setupFilesAfterEnv: ["<rootDir>/tests/setup.js"],
+  moduleNameMapper: {
+    "^sanitize-html$": "<rootDir>/tests/__mocks__/sanitize-html.js"
+  },
   collectCoverage: true,
   collectCoverageFrom: [
     "src/**/*.js",

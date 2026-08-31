@@ -18,7 +18,7 @@ async function seed() {
 
   const hashedPassword = await bcrypt.hash("password123", 10);
 
-  // 1. Upsert Recruiter
+  // 1. Upsert Recruiters
   let recruiter = await User.findOne({ email: "recruiter@techcorp.com" });
   if (!recruiter) {
     recruiter = await User.create({
@@ -29,6 +29,18 @@ async function seed() {
       company: "TechCorp Systems",
     });
     console.log("Created Recruiter:", recruiter.email);
+  }
+
+  let sarah = await User.findOne({ email: "sarah@techcorp.com" });
+  if (!sarah) {
+    sarah = await User.create({
+      name: "Sarah Chen (Senior Technical Recruiter)",
+      email: "sarah@techcorp.com",
+      password: hashedPassword,
+      role: "recruiter",
+      company: "TechCorp Systems",
+    });
+    console.log("Created Recruiter:", sarah.email);
   }
 
   // 2. Upsert Candidate / Seeker
@@ -55,6 +67,31 @@ async function seed() {
       ]
     });
     console.log("Created Seeker:", seeker.email);
+  }
+
+  let alex = await User.findOne({ email: "alex@example.com" });
+  if (!alex) {
+    alex = await User.create({
+      name: "Alex Rivera (Full Stack Engineer)",
+      email: "alex@example.com",
+      password: hashedPassword,
+      role: "seeker",
+      skills: ["javascript", "typescript", "react", "nodejs", "python", "docker", "system design", "mongodb"],
+      cgpa: 8.9,
+      college: "University of Technology",
+      collegeTier: "tier1",
+      degree: "B.S. Computer Science",
+      resumeSummary: "Full stack software engineer with 4+ years of experience building high-throughput web applications, distributed systems, and real-time collaboration tools.",
+      experience: [
+        { title: "Senior Software Engineer", company: "CloudScale Inc.", duration: "2023 - Present" },
+        { title: "Software Engineer", company: "DataFlow Labs", duration: "2021 - 2023" }
+      ],
+      achievements: [
+        "Architected real-time sync service reducing latency by 45%",
+        "Top 5% performer in algorithmic coding competitions"
+      ]
+    });
+    console.log("Created Seeker:", alex.email);
   }
 
   // 3. Upsert Jobs

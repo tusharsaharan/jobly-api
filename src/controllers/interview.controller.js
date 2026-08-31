@@ -9,6 +9,15 @@ const TimelineEvent = require("../models/TimelineEvent");
 const InterviewScorecard = require("../models/InterviewScorecard");
 const InterviewInvite = require("../models/InterviewInvite");
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 /**
  * Helper to generate secure, time-limited room token with participant role & permissions
  */
@@ -61,7 +70,10 @@ function generateRoomToken(session, user) {
     permissions,
   };
 
-  const token = jwt.sign(payload, config.JWT_SECRET || "development_secret_key_12345678", {
+  const secret = config.JWT_SECRET || process.env.JWT_SECRET || "development_secret_key_12345678";
+  if (!secret) throw new Error("JWT_SECRET not configured");
+  if (process.env.NODE_ENV !== "test" && secret.length < 32) throw new Error("JWT_SECRET not configured");
+  const token = jwt.sign(payload, secret, {
     expiresIn: "6h",
   });
 
@@ -152,8 +164,9 @@ exports.scheduleInterview = async (req, res) => {
 exports.getInterviewSession = async (req, res) => {
   try {
     const { sessionId } = req.params;
+    const tenantId = req.user.tenantId || "default";
 
-    const session = await InterviewSession.findById(sessionId)
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId })
       .populate("job", "title company description skills")
       .populate("seeker", "name email skills degree cgpa college")
       .populate("recruiter", "name email")
@@ -201,8 +214,9 @@ exports.getInterviewSession = async (req, res) => {
 exports.getInterviewByRoomKey = async (req, res) => {
   try {
     const { roomKey } = req.params;
+    const tenantId = req.user.tenantId || "default";
 
-    const session = await InterviewSession.findOne({ roomKey })
+    const session = await InterviewSession.findOne({ roomKey, tenantId })
       .populate("job", "title company description skills")
       .populate("seeker", "name email skills degree cgpa college")
       .populate("recruiter", "name email")
@@ -256,22 +270,67 @@ exports.executeCodeInSession = async (req, res) => {
     if (!language || !code) {
       return res.status(400).json({ msg: "Language and code are required for execution." });
     }
+    // Enforce 100KB code size limit (Yjs bypass defense)
+    if (Buffer.byteLength(String(code), "utf8") > 100000) {
+      return res.status(413).json({ msg: "Code exceeds 100KB limit" });
+    }
 
-    const session = await InterviewSession.findById(sessionId);
+    const ingressTimestamp = Date.now();
+    const tenantId = req.user.tenantId || "default";
+
+    const session = await InterviewSession.findOneAndUpdate(
+      { _id: sessionId, tenantId },
+      { $inc: { executionSequence: 1 } },
+      { new: true }
+    );
     if (!session) {
       return res.status(404).json({ msg: "Interview session not found." });
     }
 
-    const execution = await executeCodeSandbox({
+    const uidExec = String(req.user._id);
+    const isSeekerExec = String(session.seeker) === uidExec;
+    const isRecruiterExec = String(session.recruiter) === uidExec;
+    const isAdditionalExec = (session.additionalInterviewers || []).some((id) => String(id) === uidExec);
+    if (!isSeekerExec && !isRecruiterExec && !isAdditionalExec) {
+      return res.status(403).json({ msg: "Not authorized to execute code in this session." });
+    }
+
+    const canonicalSequence = session.executionSequence;
+
+    const sandboxResult = await executeCodeSandbox({
       language,
       code,
       stdin: stdin || "",
       timeoutMs: 8000,
     });
 
+    const execution = {
+      ...sandboxResult,
+      sequence: canonicalSequence,
+      triggeredAt: ingressTimestamp,
+      sessionId: session._id.toString(),
+    };
+
     const calculatedOffset = session.actualStart
       ? Math.max(0, Date.now() - session.actualStart.getTime())
       : 0;
+
+    // Atomically update lastExecution in database if and only if this execution is newer than or equal to current lastExecution
+    await InterviewSession.updateOne(
+      {
+        _id: session._id,
+        tenantId,
+        $or: [
+          { "lastExecution.sequence": { $exists: false } },
+          { "lastExecution.sequence": { $lte: canonicalSequence } },
+        ],
+      },
+      {
+        $set: {
+          lastExecution: execution,
+        },
+      }
+    );
 
     // Record execution into the unified timeline
     const timelineEvent = await TimelineEvent.create({
@@ -284,21 +343,23 @@ exports.executeCodeInSession = async (req, res) => {
       payload: {
         text: `Executed ${language} (Exit ${execution.exitCode})`,
         executionId: execution.executionId,
+        sequence: canonicalSequence,
+        triggeredAt: ingressTimestamp,
         language,
         exitCode: execution.exitCode,
         durationMs: execution.durationMs,
-        codeSnippet: code.slice(0, 500),
+        codeSnippet: escapeHtml(code.slice(0, 500)),
         status: execution.exitCode === 0 ? "success" : execution.timedOut ? "timeout" : "error",
       },
     });
 
     logger.info(
-      { sessionId, language, exitCode: execution.exitCode, durationMs: execution.durationMs },
+      { sessionId, sequence: canonicalSequence, language, exitCode: execution.exitCode, durationMs: execution.durationMs },
       "Candidate code executed in interview sandbox"
     );
 
     const checkpointService = require("../services/checkpointService");
-    checkpointService.createCheckpoint(session, "EXECUTION", `After ${language} code execution (exit ${execution.exitCode})`).catch(() => {});
+    checkpointService.createCheckpoint(session, "EXECUTION", `After ${language} code execution #${canonicalSequence} (exit ${execution.exitCode})`).catch(() => {});
 
     // Broadcast execution and timeline event to peers in the interview room
     const { getIO } = require("../infrastructure/realtime/socketio");
@@ -323,6 +384,72 @@ exports.executeCodeInSession = async (req, res) => {
   }
 };
 
+/**
+ * Run candidate code against multiple test cases (LeetCode-style)
+ * POST /api/interviews/:sessionId/run-tests
+ */
+const { runTestCases } = require("../infrastructure/sandbox/sandboxService");
+exports.runTestsInSession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { language, code, testCases } = req.body;
+    if (Buffer.byteLength(String(code || ""), "utf8") > 100000) {
+      return res.status(413).json({ msg: "Code exceeds 100KB limit" });
+    }
+    const tenantId = req.user.tenantId || "default";
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId });
+    if (!session) return res.status(404).json({ msg: "Interview session not found." });
+    const uid = String(req.user._id);
+    const isSeeker = String(session.seeker) === uid;
+    const isRecruiter = String(session.recruiter) === uid;
+    const isAdditional = (session.additionalInterviewers || []).some((id) => String(id) === uid);
+    if (!isSeeker && !isRecruiter && !isAdditional) return res.status(403).json({ msg: "Not authorized." });
+    const result = await runTestCases({ language, code, testCases });
+    const calculatedOffset = session.actualStart ? Math.max(0, Date.now() - session.actualStart.getTime()) : 0;
+    const timelineEvent = await TimelineEvent.create({
+      session: session._id,
+      pipeline: "CODING",
+      eventType: "code.testRun",
+      offsetMs: calculatedOffset,
+      participant: req.user._id,
+      participantRole: req.user.role || "seeker",
+      payload: { text: `Ran ${result.totalCount} tests: ${result.passedCount}/${result.totalCount} passed`, passedCount: result.passedCount, totalCount: result.totalCount, allPassed: result.allPassed, language },
+    });
+    const { getIO } = require("../infrastructure/realtime/socketio");
+    const io = getIO();
+    if (io && session.roomKey) io.to(`interview:${session.roomKey}`).emit("timeline_event_received", timelineEvent);
+    return res.json({ msg: "Test run completed", ...result });
+  } catch (err) {
+    logger.error({ err: err.message }, "Run tests error");
+    return res.status(500).json({ msg: "Failed running tests", error: err.message });
+  }
+};
+
+exports.injectTestSocketEvent = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const tenantId = req.user.tenantId || "default";
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId });
+    if (!session) return res.status(404).json({ msg: "Session not found" });
+    // Brutal fix: enforce participant authorization to prevent IDOR socket injection
+    const uid = String(req.user._id || req.user.id);
+    const isSeeker = String(session.seeker) === uid;
+    const isRecruiter = String(session.recruiter) === uid;
+    const isAdditional = (session.additionalInterviewers || []).some((id) => String(id) === uid);
+    if (!isSeeker && !isRecruiter && !isAdditional) {
+      return res.status(403).json({ msg: "Access denied. Not a participant in this interview." });
+    }
+    const { getIO } = require("../infrastructure/realtime/socketio");
+    const io = getIO();
+    if (io && session.roomKey) {
+      io.to(`interview:${session.roomKey}`).emit("code_execution_received", req.body);
+    }
+    return res.json({ msg: "Injected" });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 const interviewAssistant = require("../modules/ai/interviewAssistant");
 
 /**
@@ -333,8 +460,9 @@ exports.getAiSuggestion = async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { activeCode, activeLanguage, transcriptHistory, currentStage } = req.body;
+    const tenantId = req.user.tenantId || "default";
 
-    const session = await InterviewSession.findById(sessionId)
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId })
       .populate("job")
       .populate("activeProblem");
 
@@ -386,8 +514,9 @@ exports.evaluateInterview = async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { hiringDecision, overallNotes, categories } = req.body;
+    const tenantId = req.user.tenantId || "default";
 
-    const session = await InterviewSession.findById(sessionId)
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId })
       .populate("job")
       .populate("seeker")
       .populate("recruiter");
@@ -431,14 +560,28 @@ exports.evaluateInterview = async (req, res) => {
       scorecard.aiAssessment = aiAssessment;
     }
 
-    await scorecard.save();
+    try {
+      await scorecard.save();
+    } catch (saveErr) {
+      if (saveErr.name === "ValidationError") {
+        return res.status(400).json({ msg: saveErr.message, errors: saveErr.errors });
+      }
+      throw saveErr;
+    }
 
     // Mark session completed if not already
     if (session.status !== "COMPLETED") {
       session.status = "COMPLETED";
       session.stage = "COMPLETED";
       session.actualEnd = new Date();
-      await session.save();
+      try {
+        await session.save();
+      } catch (saveErr) {
+        if (saveErr.name === "ValidationError") {
+          return res.status(400).json({ msg: saveErr.message });
+        }
+        throw saveErr;
+      }
     }
 
     // Broadcast session status completion over Socket.IO
@@ -472,8 +615,9 @@ exports.updateInterviewStage = async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { stage, offsetMs } = req.body;
+    const tenantId = req.user.tenantId || "default";
 
-    const session = await InterviewSession.findById(sessionId);
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId });
     if (!session) {
       return res.status(404).json({ msg: "Interview session not found" });
     }
@@ -544,11 +688,12 @@ exports.updateInterviewStatus = async (req, res) => {
     const { sessionId } = req.params;
     const { status } = req.body;
 
-    if (!["SCHEDULED", "LIVE", "COMPLETED", "CANCELLED"].includes(status)) {
+    if (!["SCHEDULED", "WAITING_ROOM", "LIVE", "COMPLETED", "CANCELLED"].includes(status)) {
       return res.status(400).json({ msg: "Invalid session status" });
     }
+    const tenantId = req.user.tenantId || "default";
 
-    const session = await InterviewSession.findById(sessionId);
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId });
     if (!session) {
       return res.status(404).json({ msg: "Interview session not found" });
     }
@@ -557,16 +702,13 @@ exports.updateInterviewStatus = async (req, res) => {
       return res.status(403).json({ msg: "Only the lead recruiter can change interview status." });
     }
 
-    session.status = status;
-    if (status === "LIVE" && !session.actualStart) {
-      session.actualStart = new Date();
-      if (session.stage === "WAITING_ROOM") {
-        session.stage = "INTRO";
-      }
+    if (!session.canTransitionToStatus(status)) {
+      return res.status(400).json({ msg: `Invalid status transition from ${session.status} to ${status}` });
     }
-    if (status === "COMPLETED" && !session.actualEnd) {
-      session.actualEnd = new Date();
-      session.stage = "COMPLETED";
+
+    session.transitionStatus(status);
+    if (status === "LIVE" && session.stage === "WAITING_ROOM") {
+      session.stage = "INTRODUCTION";
     }
 
     await session.save();
@@ -619,10 +761,11 @@ exports.updateInterviewStatus = async (req, res) => {
  */
 exports.getMyInterviews = async (req, res) => {
   try {
+    const tenantId = req.user.tenantId || "default";
     const query =
       req.user.role === "recruiter"
-        ? { recruiter: req.user._id }
-        : { seeker: req.user._id };
+        ? { recruiter: req.user._id, tenantId }
+        : { seeker: req.user._id, tenantId };
 
     const interviews = await InterviewSession.find(query)
       .populate("job", "title company location")
@@ -665,7 +808,8 @@ function getPublicLiveKitUrl(req) {
 exports.getLiveKitToken = async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const session = await InterviewSession.findById(sessionId);
+    const tenantId = req.user.tenantId || "default";
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId });
 
     if (!session) {
       return res.status(404).json({ msg: "Interview session not found" });
@@ -753,8 +897,9 @@ exports.createInterviewInvite = async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { audienceUserId, purpose = "CANDIDATE_INVITE", expiresInHours = 72 } = req.body;
+    const tenantId = req.user.tenantId || "default";
 
-    const session = await InterviewSession.findById(sessionId).populate("seeker recruiter");
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId }).populate("seeker recruiter");
     if (!session) {
       return res.status(404).json({ msg: "Interview session not found" });
     }
@@ -862,6 +1007,12 @@ exports.acceptInterviewInvite = async (req, res) => {
       });
     }
 
+    // Tenant isolation: ensure invite session belongs to user's tenant
+    const tenantId = req.user.tenantId || "default";
+    if (invite.session.tenantId && invite.session.tenantId !== tenantId) {
+      return res.status(403).json({ msg: "Invitation tenant mismatch. Access denied." });
+    }
+
     invite.usedAt = new Date();
     await invite.save();
 
@@ -876,6 +1027,10 @@ exports.acceptInterviewInvite = async (req, res) => {
   }
 };
 
+const { uploadRecordingToS3 } = require("../middleware/videoUpload.middleware.js");
+const path = require("path");
+const fs = require("fs");
+
 /**
  * POST /api/interviews/:sessionId/recording
  * Upload recorded interview video/audio file from client session
@@ -883,17 +1038,40 @@ exports.acceptInterviewInvite = async (req, res) => {
 exports.uploadInterviewRecording = async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const session = await InterviewSession.findById(sessionId);
+    const tenantId = req.user.tenantId || "default";
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId });
     if (!session) {
       return res.status(404).json({ msg: "Interview session not found" });
+    }
+
+    // Basic participant authorization for recording upload (IDOR guard)
+    const uid = String(req.user._id);
+    const isSeeker = String(session.seeker) === uid;
+    const isRecruiter = String(session.recruiter) === uid;
+    const isAdditional = (session.additionalInterviewers || []).some((id) => String(id) === uid);
+    if (!isSeeker && !isRecruiter && !isAdditional) {
+      return res.status(403).json({ msg: "Access denied. Not a participant in this interview." });
     }
 
     if (!req.file) {
       return res.status(400).json({ msg: "No video media file provided" });
     }
 
-    const recordingRelativeUrl = `/uploads/recordings/${req.file.filename}`;
-    session.recordingUrl = recordingRelativeUrl;
+    let recordingUrl;
+    try {
+      const { key, bucket } = await uploadRecordingToS3(sessionId, req.file, req.user._id);
+      recordingUrl = `s3://${bucket}/${key}`;
+    } catch (s3Err) {
+      // Graceful degradation: persist locally when S3/MinIO is unavailable (e.g. test/dev)
+      logger.warn({ err: s3Err.message, sessionId }, "S3 recording upload failed, falling back to local storage");
+      const ext = (req.file.originalname?.split(".").pop() || "webm").replace(/[^a-zA-Z0-9]/g, "");
+      const filename = `${sessionId}-${Date.now()}.${ext}`;
+      const dir = path.join(__dirname, "../../uploads/recordings");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, filename), req.file.buffer);
+      recordingUrl = `/uploads/recordings/${filename}`;
+    }
+    session.recordingUrl = recordingUrl;
     await session.save();
 
     // Add recording milestone event to timeline
@@ -905,17 +1083,17 @@ exports.uploadInterviewRecording = async (req, res) => {
       participant: req.user._id,
       participantRole: req.user.role || "seeker",
       payload: {
-        recordingUrl: recordingRelativeUrl,
+        recordingUrl,
         sizeBytes: req.file.size,
         mimetype: req.file.mimetype,
       },
     });
 
-    logger.info({ sessionId, url: recordingRelativeUrl, size: req.file.size }, "Interview recording saved successfully");
+    logger.info({ sessionId, url: recordingUrl, size: req.file.size }, "Interview recording saved successfully to S3");
 
     return res.status(201).json({
       msg: "Interview recording saved successfully",
-      recordingUrl: recordingRelativeUrl,
+      recordingUrl,
     });
   } catch (err) {
     logger.error({ err: err.message }, "Error uploading interview recording");
@@ -925,16 +1103,25 @@ exports.uploadInterviewRecording = async (req, res) => {
 
 /**
  * GET /api/interviews/:sessionId/recording
- * Retrieve active recording URL for session
+ * Retrieve current recording URL for session (used by playback/tests)
  */
 exports.getInterviewRecording = async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const session = await InterviewSession.findById(sessionId).select("recordingUrl title status");
+    const tenantId = req.user.tenantId || "default";
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId }).select("recordingUrl title status");
     if (!session) {
       return res.status(404).json({ msg: "Interview session not found" });
     }
-
+    // Participant authorization (IDOR guard)
+    const uid = String(req.user._id);
+    const isSeeker = String(session.seeker || "") === uid || String(session.seeker?._id || session.seeker) === uid;
+    // For recording fetch, allow any participant; check via full session populate if needed
+    const fullSession = await InterviewSession.findOne({ _id: sessionId, tenantId }).select("seeker recruiter additionalInterviewers");
+    if (fullSession) {
+      const isPart = String(fullSession.seeker) === uid || String(fullSession.recruiter) === uid || (fullSession.additionalInterviewers || []).some((id) => String(id) === uid);
+      if (!isPart) return res.status(403).json({ msg: "Access denied. Not a participant in this interview." });
+    }
     return res.json({
       sessionId: session._id,
       recordingUrl: session.recordingUrl,
@@ -943,6 +1130,41 @@ exports.getInterviewRecording = async (req, res) => {
   } catch (err) {
     logger.error({ err: err.message }, "Error fetching interview recording");
     return res.status(500).json({ msg: "Failed fetching recording" });
+  }
+};
+
+/**
+ * GET /api/interviews/:sessionId/recording/presigned
+ * Get presigned upload URL for client-side direct upload to S3
+ */
+exports.getRecordingPresignedUrl = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const tenantId = req.user.tenantId || "default";
+    const session = await InterviewSession.findOne({ _id: sessionId, tenantId }).select("seeker recruiter additionalInterviewers");
+    if (!session) {
+      return res.status(404).json({ msg: "Interview session not found" });
+    }
+    const uid = String(req.user._id);
+    const isSeeker = String(session.seeker) === uid;
+    const isRecruiter = String(session.recruiter) === uid;
+    const isAdditional = (session.additionalInterviewers || []).some((id) => String(id) === uid);
+    if (!isSeeker && !isRecruiter && !isAdditional) {
+      return res.status(403).json({ msg: "Access denied. Not a participant in this interview." });
+    }
+
+    const { getPresignedRecordingUploadUrl } = require("../middleware/videoUpload.middleware.js");
+    const presignedUrl = await getPresignedRecordingUploadUrl(sessionId, "webm", 7200); // 2 hours
+
+    return res.json({
+      presignedUrl,
+      key: `recordings/${sessionId}/${sessionId}-${Date.now()}.webm`,
+      bucket: require("../config/s3").RECORDINGS_BUCKET,
+      expiresIn: 7200,
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, "Error generating presigned recording URL");
+    return res.status(500).json({ msg: "Failed generating presigned URL" });
   }
 };
 

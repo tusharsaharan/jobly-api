@@ -13,6 +13,27 @@ const PORT = config.PORT || 5000;
 async function bootstrap() {
   await connectDB();
 
+  // ── EmbeddingChuck dim health check (follow-up migration transparency) ──
+  try {
+    const EmbeddingChunk = require("./models/EmbeddingChunk");
+    const total = await EmbeddingChunk.countDocuments();
+    if (total > 0) {
+      const sample = await EmbeddingChunk.findOne({}).select("embedding").lean();
+      const dim = Array.isArray(sample?.embedding) ? sample.embedding.length : -1;
+      if (dim !== 3072) {
+        logger.warn({ total, dim }, `⚠️  EmbeddingChunk dims are ${dim}, expected 3072. Run "npm run migrate:embeddings" or "npm run seed:rag" to normalize. Hybrid RRF fallback is active, but Atlas vector search will fail until migrated.`);
+      } else {
+        // Quick distribution check (sample 200)
+        const all = await EmbeddingChunk.find({}).select("embedding").limit(200).lean();
+        const bad = all.filter((d) => !Array.isArray(d.embedding) || d.embedding.length !== 3072).length;
+        if (bad > 0) logger.warn({ sampleBad: bad, total }, "⚠️  Some EmbeddingChunk dims != 3072 — migrate recommended.");
+        else logger.info({ total }, "✅ EmbeddingChunk dims OK (3072) — Hybrid RRF + Atlas ready.");
+      }
+    }
+  } catch (e) {
+    logger.debug({ err: e.message }, "Embedding dim check skipped");
+  }
+
   const server = http.createServer(app);
   setupSocketIO(server);
 

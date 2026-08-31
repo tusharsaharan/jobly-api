@@ -252,6 +252,30 @@
       "label": "AI & Machine Learning",
       "category": "ai",
       "aliases": ["machine learning", "ml", "artificial intelligence", "ai", "deep learning", "nlp", "llm", "rag", "pytorch", "tensorflow", "openai", "gemini"]
+    },
+    {
+      "id": "skill_c",
+      "label": "C",
+      "category": "systems",
+      "aliases": ["c language", "ansi c", "c programming", "c99", "c11"]
+    },
+    {
+      "id": "skill_sql",
+      "label": "SQL",
+      "category": "database",
+      "aliases": ["sql", "sql query", "sql queries", "t-sql", "transact-sql", "plsql", "pl/sql"]
+    },
+    {
+      "id": "skill_kafka",
+      "label": "Apache Kafka",
+      "category": "architecture",
+      "aliases": ["kafka", "apache kafka", "kafka streams", "event streaming"]
+    },
+    {
+      "id": "skill_rabbitmq",
+      "label": "RabbitMQ",
+      "category": "architecture",
+      "aliases": ["rabbitmq", "rabbit mq", "amqp"]
     }
   ]
 }

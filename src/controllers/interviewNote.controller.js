@@ -21,7 +21,8 @@ async function authorizeInterviewTeam(sessionId, user) {
 }
 
 function sanitizeNoteInput(input = {}) {
-  const body = typeof input.body === "string" ? input.body.trim() : "";
+  const rawBody = typeof input.body === "string" ? input.body : typeof input.content === "string" ? input.content : "";
+  const body = rawBody.trim();
   if (!body || body.length > 20000) {
     const error = new Error("A note must contain 1 to 20,000 characters");
     error.status = 400;

@@ -27,24 +27,36 @@ const interviewSignalSchema = new mongoose.Schema(
     weight: {
       type: Number,
       default: 1.0,
+      min: 0.1,
+      max: 5.0,
     },
     offsetMs: {
       type: Number,
       default: 0,
+      min: 0,
       index: true,
     },
     payload: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
+      validate: {
+        validator: function (v) {
+          return v === null || v === undefined || (typeof v === "object" && !Array.isArray(v));
+        },
+        message: "payload must be a plain object",
+      },
     },
     evidenceRef: {
       type: mongoose.Schema.Types.Mixed,
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true, strict: true, strictQuery: true }
 );
 
 interviewSignalSchema.index({ sessionId: 1, offsetMs: 1 });
+interviewSignalSchema.index({ sessionId: 1, category: 1 });
+interviewSignalSchema.index({ sessionId: 1, category: 1, offsetMs: 1 });
+interviewSignalSchema.index({ sessionId: 1, name: 1 });
 
 module.exports = mongoose.model("InterviewSignal", interviewSignalSchema);

@@ -99,9 +99,36 @@ const mockAiMethods = {
         requiredDegree: "B.Tech"
       }
     });
-  })
+  }),
+  summarizeConversation: jest.fn().mockImplementation(() => {
+    return Promise.resolve({
+      summary: "The thread covered introductions and next steps for the role.",
+      highlights: [
+        "Candidate introduced themselves",
+        "Interview availability discussed",
+        "Next steps pending"
+      ]
+    });
+  }),
+  generateFocusQuiz: jest.fn().mockImplementation((topic, userProfile, opts) => {
+    const count = Math.min(20, Math.max(1, Number(opts?.count) || 5));
+    return Promise.resolve(Array.from({length: count}, (_,i)=>({ question: `Q${i+1} about ${topic}?`, options: ["A","B","C","D"], correctAnswer: 0, topic, difficulty: opts?.difficulty || "Medium", timeLimitSeconds: 20 })));
+  }),
+  generateCPProblem: jest.fn().mockImplementation((topic, opts) => {
+    return Promise.resolve({ problemStatement: `CP Problem on ${topic}`, initialCode: "// solve", testCases: [{input:"1", expectedOutput:"1"}] });
+  }),
+  predictCandidateQuestions: jest.fn().mockImplementation((payload) => {
+    return Promise.resolve([{ id: "q-1", question: "What is the team structure?", defaultAnswer: "Small team", category: "team_structure" }]);
+  }),
+  executeWithCascade: jest.fn().mockImplementation((prompt, schema, opts) => {
+    return Promise.resolve({ success: true, data: { rewrittenDescription: "Improved description", improvements: [], summary: "Improved", questions: [] }, provider: "mock" });
+  }),
+  retrieve: jest.fn().mockImplementation((q, opts) => Promise.resolve([])),
+  ragAnswer: jest.fn().mockImplementation((msg, chunks, opts) => Promise.resolve({ reply: "Mocked RAG answer", sources: [], confidence: 0.9 })),
 };
 
 jest.mock("../src/services/ai.service", () => mockAiMethods);
 jest.mock("../src/modules/ai/aiService", () => mockAiMethods);
+jest.mock("../src/services/rag.service", () => ({ retrieve: mockAiMethods.retrieve, ragAnswer: mockAiMethods.ragAnswer }));
+jest.mock("../src/services/deiService", () => ({ rewriteForDei: jest.fn().mockImplementation((title, desc) => Promise.resolve({ rewrittenDescription: `Inclusive version of ${desc.slice(0,100)}`, improvements: [{ originalPhrase: "rockstar", replacementPhrase: "skilled specialist", reason: "Inclusive" }], summary: "Made inclusive" })) }));
 

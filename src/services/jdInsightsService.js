@@ -20,7 +20,7 @@ class JdInsightsService {
       const matchingJobs = await Job.find({
         $or: [
           { title: { $regex: titleRegex } },
-          ...(skills.length > 0 ? [{ skills: { $in: skills.map(s => new RegExp(s, "i")) } }] : [])
+          ...(skills.length > 0 ? [{ skills: { $in: skills.map(s => new RegExp(String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")) } }] : [])
         ]
       }).select("_id title description skills salaryRange atsRequirements createdAt").lean();
 

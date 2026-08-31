@@ -84,10 +84,14 @@ async function authenticate(rawToken, roomKeyOrSessionId) {
   if (!rawToken) throw new Error("Missing authentication token");
 
   let decoded;
+  const secret = config.JWT_SECRET || process.env.JWT_SECRET;
+  if (!secret) throw new Error("Server misconfigured: JWT_SECRET not set");
+  if (process.env.NODE_ENV !== "test" && secret.length < 32) throw new Error("Server misconfigured: JWT_SECRET not set");
   try {
     decoded = jwt.verify(
       rawToken,
-      config.JWT_SECRET || process.env.JWT_SECRET || "development_secret_key_12345678"
+      secret,
+      { algorithms: ["HS256"] }
     );
   } catch (err) {
     throw new Error(`Invalid token: ${err.message}`);
@@ -110,13 +114,9 @@ async function authenticate(rawToken, roomKeyOrSessionId) {
   const additional = (session.additionalInterviewers || []).map((id) => String(id?._id || id));
 
   const isParticipant =
-    !session ||
     (seekerId && seekerId === uid) ||
     (recruiterId && recruiterId === uid) ||
-    additional.includes(uid) ||
-    decoded.role === "recruiter" ||
-    decoded.role === "seeker" ||
-    process.env.NODE_ENV !== "production";
+    additional.includes(uid);
 
   if (!isParticipant) throw new Error(`Access denied: not a registered participant (${uid})`);
 

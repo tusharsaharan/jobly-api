@@ -8,10 +8,23 @@ const logger = require("../../config/logger");
 const activeTerminals = new Map();
 const terminalRunnerUrl = process.env.TERMINAL_RUNNER_URL;
 
+function getRunnerAuthHeader() {
+  try {
+    const config = require("../../config/env");
+    const secret = config.JWT_SECRET;
+    if (!secret || secret.length < 10) return {};
+    const jwt = require("jsonwebtoken");
+    const token = jwt.sign({ service: "jobly-api" }, secret, { expiresIn: "5m" });
+    return { Authorization: `Bearer ${token}` };
+  } catch { return {}; }
+}
+
 async function callRunner(path, method = "GET", body) {
+  const authHeader = getRunnerAuthHeader();
+  const headers = { ...authHeader, ...(body ? { "Content-Type": "application/json" } : {}) };
   const response = await fetch(`${terminalRunnerUrl}${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   const payload = await response.json().catch(() => ({}));
@@ -34,68 +47,30 @@ function getDefaultShell() {
  */
 function createTerminalSession(sessionId, cols = 80, rows = 24, onDataCallback) {
   if (terminalRunnerUrl) return createRemoteTerminalSession(sessionId, cols, rows, onDataCallback);
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Interactive terminal is unavailable: TERMINAL_RUNNER_URL is not configured. Refusing to expose a host shell.");
-  }
-  const terminalId = `term_${crypto.randomUUID()}`;
-  let ptyProcess;
-
-  try {
-    // Attempt node-pty if installed and built
-    const pty = require("node-pty");
-    const shell = getDefaultShell();
-    ptyProcess = pty.spawn(shell, [], {
-      name: "xterm-color",
-      cols,
-      rows,
-      cwd: os.homedir(),
-      env: {
-        ...process.env,
-        TERM: "xterm-256color",
-        COLORTERM: "truecolor",
+  if (process.env.NODE_ENV === "test") {
+    // Allow in-memory pty for unit tests but with restricted env/cwd
+    const terminalId = `term_${crypto.randomUUID()}`;
+    const sessionEntry = {
+      terminalId,
+      sessionId,
+      history: [],
+      lastActivity: Date.now(),
+      remote: false,
+      ptyProcess: {
+        write: (data) => {
+          if (onDataCallback) onDataCallback(terminalId, data);
+          sessionEntry.history.push(data);
+        },
+        stdin: { writable: true, write: (d) => { if (onDataCallback) onDataCallback(terminalId, d); } },
+        kill: () => {},
+        resize: () => true,
       },
-    });
-
-    if (onDataCallback) {
-      ptyProcess.onData((data) => {
-        onDataCallback(terminalId, data);
-      });
-    }
-  } catch {
-    // Resilient fallback: standard child_process spawn
-    logger.warn({ terminalId }, "node-pty not available, falling back to standard shell spawn");
-    const shell = getDefaultShell();
-    ptyProcess = spawn(shell, [], {
-      cwd: os.homedir(),
-      env: {
-        ...process.env,
-        TERM: "xterm-256color",
-      },
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-
-    if (onDataCallback && ptyProcess.stdout) {
-      ptyProcess.stdout.on("data", (chunk) => {
-        onDataCallback(terminalId, chunk.toString());
-      });
-      ptyProcess.stderr.on("data", (chunk) => {
-        onDataCallback(terminalId, chunk.toString());
-      });
-    }
+    };
+    activeTerminals.set(terminalId, sessionEntry);
+    logger.info({ terminalId, sessionId }, "Test terminal session created (restricted)");
+    return terminalId;
   }
-
-  const sessionEntry = {
-    terminalId,
-    sessionId,
-    ptyProcess,
-    history: [],
-    lastActivity: Date.now(),
-  };
-
-  activeTerminals.set(terminalId, sessionEntry);
-  logger.info({ terminalId, sessionId }, "Terminal session created");
-
-  return terminalId;
+  throw new Error("Interactive terminal is unavailable: TERMINAL_RUNNER_URL is not configured. Refusing to expose a host shell.");
 }
 
 async function createRemoteTerminalSession(sessionId, cols, rows, onDataCallback) {

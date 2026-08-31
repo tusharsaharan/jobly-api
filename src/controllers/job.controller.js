@@ -61,7 +61,7 @@ exports.searchJobs = async (req, res) => {
     const isRecruiter = req.user.role === "recruiter";
     const filter = isRecruiter ? { recruiter: req.user._id } : {};
 
-    const jobs = await Job.find(filter).sort({ createdAt: -1 }).lean();
+    const jobs = await Job.find(filter).sort({ createdAt: -1 }).limit(100).lean();
 
     if (!query) {
       return res.json(jobs);
@@ -113,15 +113,16 @@ exports.getJobs = async (req, res) => {
 
     const filter = isRecruiter ? { recruiter: req.user._id } : {};
     
-    // Support optional pagination query params (only paginate when explicitly requested)
-    const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    // Enforce strict pagination to prevent OOM
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     
-    let query = Job.find(filter).sort({ createdAt: -1 }).lean();
-    if (hasPagination) {
-      query = query.skip((page - 1) * limit).limit(limit);
-    }
+    let query = Job.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+    
     const jobs = await query;
 
     if (!isRecruiter || jobs.length === 0) {
@@ -168,7 +169,7 @@ exports.getJobs = async (req, res) => {
  */
 exports.getMatchedJobs = async (req, res) => {
   try {
-    const jobs = await Job.find().sort({ createdAt: -1 }).lean();
+    const jobs = await Job.find().sort({ createdAt: -1 }).limit(100).lean();
 
     const matchedJobs = jobs
       .map((job) => {
@@ -290,7 +291,11 @@ exports.candidatePoolPreview = async (req, res) => {
     const { skills = [], minCgpa = 0, targetCollegeTier = "any" } = req.body;
     
     const query = { role: "seeker" };
-    if (skills.length > 0) query.skills = { $in: skills.map(s => new RegExp(s, "i")) };
+    if (skills.length > 0) {
+      query.skills = {
+        $in: skills.map((s) => new RegExp(String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")),
+      };
+    }
     if (minCgpa > 0) query.cgpa = { $gte: minCgpa };
     
     if (targetCollegeTier === "tier1") {
@@ -338,13 +343,17 @@ exports.flagRequirements = async (req, res) => {
     const { type = "rules", payload = {} } = req.body;
     
     if (type === "semantic") {
-      const flags = await requirementsFlagService.getSemanticFlags(payload);
-      return res.json({ flags });
+      const semanticResult = await requirementsFlagService.getSemanticFlags(payload);
+      return res.json({
+        flags: semanticResult.flags || [],
+        isUnavailable: Boolean(semanticResult.isUnavailable),
+        error: semanticResult.error || null
+      });
     }
     
     // Default to rules
     const flags = requirementsFlagService.getRuleBasedFlags(payload);
-    res.json({ flags });
+    res.json({ flags, isUnavailable: false });
   } catch (err) {
     logger.error({ err: err.message }, "Failed to flag requirements");
     res.status(500).json({ msg: "Failed to flag requirements" });
@@ -358,31 +367,19 @@ exports.getHealthScore = async (req, res) => {
   try {
     const { type = "rules", payload = {} } = req.body;
     
-    // Base rule-based score
-    const completeness = healthScoreService.getCompletenessScore(payload);
-    const salary = healthScoreService.getSalaryTransparencyScore(payload);
-    
-    let bias = { score: 100, feedback: [] };
+    let biasResult = null;
     
     // If semantic requested (on blur), add LLM bias score
     if (type === "semantic") {
-      bias = await healthScoreService.getBiasScore(payload);
+      biasResult = await healthScoreService.getBiasScore(payload);
     }
 
-    // Weighting derived from original 5-factor plan:
-    // Completeness (20), Bias-free language (20), Salary Transparency (15) -> Sum = 55
-    // Renormalized to 100 preserving exact relative ratios:
-    // Completeness: 20/55 (~36.4%), Bias: 20/55 (~36.4%), Salary: 15/55 (~27.3%)
-    const total = Math.round((completeness * 20 + bias.score * 20 + salary.score * 15) / 55);
+    const health = await healthScoreService.calculateHealthScore(payload, biasResult);
 
     res.json({
-      total,
-      breakdown: {
-        completeness,
-        bias,
-        salary
-      },
-      provisionalNotice: "Provisional Day-1 calibration based on 3 computable factors. Will recalibrate to full 5-factor model once historical distributions reach N > 100."
+      total: health.total,
+      breakdown: health.breakdown,
+      provisionalNotice: "Provisional Day-1 calibration based on available computable factors. Will recalibrate to full 5-factor model once historical distributions reach N > 100."
     });
   } catch (err) {
     logger.error({ err: err.message }, "Failed to get health score");
@@ -417,7 +414,15 @@ exports.deiRewrite = async (req, res) => {
     res.json(result);
   } catch (err) {
     logger.error({ err: err.message }, "DEI rewrite error");
-    res.status(500).json({ msg: err.message || "Failed to rewrite for DEI" });
+    // Brutal fix: gracefull degradation for recruiter form when AI unavailable - don't 500
+    const fallbackDesc = req.body?.description || "";
+    return res.json({
+      rewrittenDescription: fallbackDesc,
+      improvements: [],
+      summary: "DEI service temporarily unavailable. Please try again or review manually.",
+      isUnavailable: true,
+      error: err.message,
+    });
   }
 };
 
@@ -467,13 +472,14 @@ exports.marketCompare = async (req, res) => {
   try {
     const { title = "", skills = [], atsRequirements = {}, salaryRange = {} } = req.body || {};
     const titleWords = String(title).trim().split(/\s+/).filter(w => w.length > 2);
-    const titleRegex = titleWords.length > 0 ? new RegExp(titleWords.join("|"), "i") : /.*/;
+    const escapedWords = titleWords.map(w => String(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const titleRegex = escapedWords.length > 0 ? new RegExp(escapedWords.join("|"), "i") : /.*/;
 
     // Find up to 5 similar jobs
     const similarJobs = await Job.find({
       $or: [
         { title: { $regex: titleRegex } },
-        ...(skills.length > 0 ? [{ skills: { $in: skills.map(s => new RegExp(s, "i")) } }] : [])
+        ...(skills.length > 0 ? [{ skills: { $in: skills.map(s => new RegExp(String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")) } }] : [])
       ]
     })
       .select("title company skills atsRequirements salaryRange type location createdAt")
@@ -555,7 +561,13 @@ exports.predictQuestions = async (req, res) => {
     res.json({ questions });
   } catch (err) {
     logger.error({ err: err.message }, "Predict questions error");
-    res.status(500).json({ msg: "Failed to predict candidate questions" });
+    // Brutal fix: gracefull degradation - don't 500 recruiter form
+    return res.json({
+      questions: [],
+      isUnavailable: true,
+      error: err.message,
+      fallbackMessage: "Question prediction temporarily unavailable. Please add FAQs manually.",
+    });
   }
 };
 

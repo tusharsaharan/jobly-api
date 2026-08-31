@@ -37,6 +37,19 @@ const jobGenerationSchema = z.object({
     minExperienceYears: 0,
     requiredDegree: "",
   }),
+  salaryRange: z.object({
+    min: z.number().nullable().default(null),
+    max: z.number().nullable().default(null),
+    currency: z.string().default("USD"),
+    period: z.enum(["annual", "monthly", "hourly"]).default("annual"),
+    visible: z.boolean().default(true),
+  }).default({
+    min: null,
+    max: null,
+    currency: "USD",
+    period: "annual",
+    visible: true,
+  }),
 });
 
 const candidateQuestionsSchema = z.object({
@@ -50,8 +63,14 @@ const candidateQuestionsSchema = z.object({
   ).default([]),
 });
 
+const conversationSummarySchema = z.object({
+  summary: z.string().default(""),
+  highlights: z.array(z.string()).default([]),
+});
+
 module.exports = {
   resumeExtractionSchema,
   jobGenerationSchema,
   candidateQuestionsSchema,
+  conversationSummarySchema,
 };

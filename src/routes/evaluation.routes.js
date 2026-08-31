@@ -6,6 +6,8 @@ const { validateBody, createEvaluationSchema } = require("../middleware/validati
 
 router.use(authMiddleware);
 
+// Strict plan: submit rubric score with evidence (4-pillar)
+router.post("/:sessionId/competencies", validateBody(createEvaluationSchema), evaluationController.createCompetencyEvaluation);
 router.post("/:sessionId", validateBody(createEvaluationSchema), evaluationController.createEvaluation);
 router.get("/:sessionId/candidate-feedback", evaluationController.getCandidateFeedback);
 router.get("/:sessionId", evaluationController.getEvaluation);

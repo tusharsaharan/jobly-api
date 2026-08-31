@@ -34,6 +34,7 @@ Key DEI Guidelines:
 3. Remove subtle age-exclusionary phrases ('digital native', 'recent grads only', 'high-energy youthful culture').
 4. Balance assertive and communal language to encourage broader candidate application rates.
 5. Keep the formatting clean (bullet points, clear sections).
+6. Do not use any emojis.
 
 Job Title: ${title || "Position"}
 Original Job Description:

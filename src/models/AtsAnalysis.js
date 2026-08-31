@@ -64,7 +64,7 @@ const AtsAnalysisSchema = new mongoose.Schema({
   jobId: { type: mongoose.Schema.Types.ObjectId, ref: "Job", default: null, index: true },
   resumeUploadId: { type: String, required: true, index: true },
   resumeHash: { type: String, required: true },
-  jobRevision: { type: Number, default: 1 },
+  jobRevision: { type: Number, default: null },
   calculatedAt: { type: Date, default: Date.now },
   status: { type: String, enum: ["completed", "partial", "failed"], default: "completed" },
   overallScore: { type: Number, min: 0, max: 100, default: null },

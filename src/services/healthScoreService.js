@@ -68,7 +68,7 @@ class HealthScoreService {
    */
   async getBiasScore(payload) {
     if (!payload.description || payload.description.length < 50) {
-      return { score: 100, feedback: [] };
+      return { score: null, feedback: [], isUnavailable: false, isPending: true };
     }
 
     try {
@@ -84,30 +84,63 @@ ${String(payload.description).slice(0, 3000)}
 Return strictly as JSON matching { "score": number, "feedback": string[] }
 `;
       const result = await aiService.executeWithCascade(prompt, biasSchema, { preferredProvider: "gemini" });
-      return result.data || { score: 100, feedback: [] };
+      if (!result.success || !result.data || typeof result.data.score !== "number") {
+        logger.warn("Bias check cascade failed to produce valid score");
+        return {
+          score: null,
+          feedback: ["AI bias evaluation service is temporarily unavailable."],
+          isUnavailable: true
+        };
+      }
+      return {
+        score: result.data.score,
+        feedback: result.data.feedback || [],
+        isUnavailable: false
+      };
     } catch (err) {
       logger.error({ err: err.message }, "Failed to get bias score");
-      return { score: 100, feedback: [] }; // Fail open
+      return {
+        score: null,
+        feedback: ["AI bias evaluation service is temporarily unavailable."],
+        isUnavailable: true
+      };
     }
   }
 
   /**
    * Aggregate the overall Day 1 health score.
    * Derived from original 5-factor plan: Completeness (20), Bias-free (20), Salary transparency (15)
-   * Sum of Day 1 weights = 55. Normalized = (Completeness*20 + Bias*20 + Salary*15) / 55
-   * => ~36.4% Completeness, ~36.4% Bias-free, ~27.3% Salary transparency
+   * If bias check is unavailable/pending, weights rescale dynamically to (Completeness*20 + Salary*15) / 35.
    */
-  async calculateHealthScore(payload, biasScore = 100) {
+  async calculateHealthScore(payload, biasResult = null) {
     const completeness = this.getCompletenessScore(payload);
     const salary = this.getSalaryTransparencyScore(payload);
     
-    const total = Math.round((completeness * 20 + biasScore * 20 + salary.score * 15) / 55);
+    const biasScore = (biasResult && typeof biasResult.score === "number") ? biasResult.score : null;
+    const isBiasAvailable = biasScore !== null;
+
+    let total;
+    if (isBiasAvailable) {
+      total = Math.round((completeness * 20 + biasScore * 20 + salary.score * 15) / 55);
+    } else {
+      total = Math.round((completeness * 20 + salary.score * 15) / 35);
+    }
     
     return {
       total,
       breakdown: {
         completeness,
-        bias: { score: biasScore, feedback: [] },
+        bias: biasResult ? {
+          score: biasResult.score,
+          feedback: biasResult.feedback || [],
+          isUnavailable: Boolean(biasResult.isUnavailable),
+          isPending: Boolean(biasResult.isPending)
+        } : {
+          score: null,
+          feedback: [],
+          isUnavailable: true,
+          isPending: false
+        },
         salary
       }
     };

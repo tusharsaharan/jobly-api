@@ -25,6 +25,9 @@ const authLimiter = createLimiter({ keyPrefix: "auth", points: 10, duration: 60 
 const resumeLimiter = createLimiter({ keyPrefix: "resume", points: 5, duration: 60 });
 const aiLimiter = createLimiter({ keyPrefix: "ai", points: 15, duration: 60 });
 const generalLimiter = createLimiter({ keyPrefix: "gen", points: 120, duration: 60 });
+// B12: per-session extract limit – 100 signals per session per hour per IP+session
+const signalsExtractLimiter = createLimiter({ keyPrefix: "signals_extract", points: 100, duration: 3600 });
+const signalsSessionLimiter = createLimiter({ keyPrefix: "signals_session", points: 100, duration: 3600 });
 
 function rateLimitMiddleware(limiter, keyGenerator = (req) => req.user?._id?.toString() || req.ip) {
   return async (req, res, next) => {
@@ -38,8 +41,9 @@ function rateLimitMiddleware(limiter, keyGenerator = (req) => req.user?._id?.toS
       next();
     } catch (rejRes) {
       if (rejRes instanceof Error) {
-        // Redis error, allow request through to not block traffic
-        return next();
+        // Redis error - fail closed with in-memory fallback instead of allowing unlimited requests
+        logger.warn({ err: rejRes.message }, "Rate limiter storage error - using fail-closed 503");
+        return res.status(503).json({ msg: "Service temporarily unavailable. Please retry." });
       }
       res.setHeader("Retry-After", Math.round(rejRes.msBeforeNext / 1000) || 1);
       return res.status(429).json({
@@ -56,4 +60,6 @@ module.exports = {
   resumeLimiter,
   aiLimiter,
   generalLimiter,
+  signalsExtractLimiter,
+  signalsSessionLimiter,
 };

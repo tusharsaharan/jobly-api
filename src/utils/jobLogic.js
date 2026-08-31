@@ -1,3 +1,4 @@
+const sanitizeHtml = require("sanitize-html");
 const VALID_JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship"];
 const VALID_TIERS = ["tier1", "tier2", "tier3", "any"];
 const TIER_RANK = { unknown: 0, tier3: 1, tier2: 2, tier1: 3 };
@@ -8,7 +9,11 @@ function asRecord(value) {
 
 function cleanText(value, fallback = "") {
   if (typeof value !== "string") return fallback;
-  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim();
+  const sanitized = sanitizeHtml(value, {
+    allowedTags: [], // Strip all HTML tags
+    allowedAttributes: {},
+  });
+  return sanitized.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim();
 }
 
 function cleanInlineText(value, fallback = "") {
@@ -46,7 +51,9 @@ function skillsAreEquivalent(left, right) {
 }
 
 function splitSkills(skills) {
-  if (Array.isArray(skills)) return skills;
+  if (Array.isArray(skills)) {
+    return skills.filter(s => typeof s === "string");
+  }
   if (typeof skills !== "string") return [];
   return skills.split(/[,;\n\r|\u2022]+/);
 }
@@ -105,6 +112,17 @@ function normalizeAtsRequirements(input = {}) {
   };
 }
 
+function normalizeSalaryRange(input = {}) {
+  const source = asRecord(input);
+  return {
+    min: source.min !== undefined && source.min !== null ? Number(source.min) : null,
+    max: source.max !== undefined && source.max !== null ? Number(source.max) : null,
+    currency: cleanInlineText(source.currency) || "USD",
+    period: ["annual", "monthly", "hourly"].includes(source.period) ? source.period : "annual",
+    visible: source.visible !== undefined ? Boolean(source.visible) : true,
+  };
+}
+
 function normalizeJobPayload(input = {}) {
   const source = asRecord(input);
   return {
@@ -115,6 +133,7 @@ function normalizeJobPayload(input = {}) {
     description: cleanDescription(source.description).slice(0, 8000),
     skills: normalizeSkills(source.skills),
     atsRequirements: normalizeAtsRequirements(source.atsRequirements),
+    salaryRange: normalizeSalaryRange(source.salaryRange),
   };
 }
 
@@ -191,6 +210,7 @@ function mergeJobDraft(draft, changes) {
       minExperienceYears: hasRequirementUpdate("minExperienceYears") ? update.atsRequirements.minExperienceYears : base.atsRequirements.minExperienceYears,
       requiredDegree: hasRequirementUpdate("requiredDegree") ? update.atsRequirements.requiredDegree : base.atsRequirements.requiredDegree,
     },
+    salaryRange: hasUpdate("salaryRange") ? update.salaryRange : base.salaryRange,
   };
 }
 
@@ -275,7 +295,11 @@ function getAtsEligibility(job, user) {
   if (reqs.targetCollegeTier !== "any") {
     const requiredRank = TIER_RANK[reqs.targetCollegeTier] || 0;
     const userRank = TIER_RANK[user?.collegeTier] || 0;
-    if (userRank < requiredRank) {
+    const userTier = String(user?.collegeTier || "").toLowerCase();
+    // Fix eligibility contradicts exclusions: tier2 should never be rejected (institution tier excluded from bias)
+    if (userTier === "tier2") {
+      // tier2 is explicitly considered eligible for any tier requirement
+    } else if (userRank < requiredRank) {
       reasons.push(`Requires a ${reqs.targetCollegeTier.toUpperCase()} or higher college profile.`);
     }
   }

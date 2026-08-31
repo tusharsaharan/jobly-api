@@ -33,6 +33,30 @@ const {
 
 const awarenessProtocol = require("y-protocols/dist/awareness.cjs");
 const encoding = require("lib0/dist/encoding.cjs");
+const decoding = require("lib0/dist/decoding.cjs");
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+function sanitizeAwarenessUser(user, authName) {
+  if (!user) return user;
+  const clean = { ...user };
+  if (authName) {
+    clean.name = escapeHtml(String(authName).slice(0, 50));
+  } else if (clean.name) {
+    clean.name = escapeHtml(String(clean.name).slice(0, 50).replace(/<[^>]*>/g, ""));
+  }
+  // Only allow name and color
+  const allowed = {};
+  if (clean.name) allowed.name = clean.name;
+  if (clean.color) allowed.color = String(clean.color).slice(0, 20);
+  return allowed;
+}
 
 // ─── WebSocket Servers ──────────────────────────────────────────────────────
 
@@ -52,14 +76,19 @@ async function authenticate(rawToken, roomKey) {
   if (!rawToken) throw new Error("Missing authentication token");
 
   let decoded;
+  const secret = config.JWT_SECRET || process.env.JWT_SECRET;
+  if (!secret) throw new Error("Server misconfigured: JWT_SECRET not set");
+  if (process.env.NODE_ENV !== "test" && secret.length < 32) throw new Error("Server misconfigured: JWT_SECRET not set");
   try {
-    decoded = jwt.verify(rawToken, config.JWT_SECRET || process.env.JWT_SECRET || "development_secret_key_12345678");
+    decoded = jwt.verify(rawToken, secret, { algorithms: ["HS256"] });
   } catch (err) {
     throw new Error(`Invalid token: ${err.message}`);
   }
 
-  // Verify user is a participant in this interview session
-  const session = await InterviewSession.findOne({ roomKey })
+  // Verify user is a participant in this interview session — tenant-aware when present
+  const seekerSessionQuery = { roomKey };
+  // Note: yjs connections are per-roomKey, tenant check via session tenantId vs user? We enforce via participant check; cross-tenant roomKey guessing is mitigated by random roomKey entropy
+  const session = await InterviewSession.findOne(seekerSessionQuery)
     .select("seeker recruiter additionalInterviewers status")
     .lean();
 
@@ -71,13 +100,9 @@ async function authenticate(rawToken, roomKey) {
   const additional = (session.additionalInterviewers || []).map((id) => String(id?._id || id));
 
   const isParticipant =
-    !session ||
     (seekerId && seekerId === uid) ||
     (recruiterId && recruiterId === uid) ||
-    additional.includes(uid) ||
-    decoded.role === "recruiter" ||
-    decoded.role === "seeker" ||
-    process.env.NODE_ENV !== "production";
+    additional.includes(uid);
 
   if (!isParticipant) throw new Error(`Access denied: not a registered participant (${uid})`);
 
@@ -170,7 +195,33 @@ async function connectClientToRoom(ws, roomKey, docMap, getOrCreate, namespace) 
   // ── Incoming message from client ─────────────────────────────────────────
   ws.on("message", (data) => {
     try {
-      const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+      let buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+      // Awareness spoofing defense: validate awareness user field against socket.user (only allow name from auth)
+      try {
+        const uint8 = new Uint8Array(buf);
+        const decoder = decoding.createDecoder(uint8);
+        const msgType = decoding.readVarUint(decoder);
+        if (msgType === MESSAGE_AWARENESS) {
+          const rawUpdate = decoding.readVarUint8Array(decoder);
+          const authName = ws.user?.name || ws.decoded?.userName || ws.decoded?.name || ws.authName || null;
+          const sanitizedUpdate = awarenessProtocol.modifyAwarenessUpdate(rawUpdate, (state) => {
+            if (!state || typeof state !== "object") return state;
+            if (!state.user) return state;
+            const sanitizedUser = sanitizeAwarenessUser(state.user, authName);
+            // Strip role injection and only allow safe fields
+            const newState = { user: sanitizedUser };
+            if (state.cursor) newState.cursor = state.cursor;
+            return newState;
+          });
+          const enc = encoding.createEncoder();
+          encoding.writeVarUint(enc, MESSAGE_AWARENESS);
+          encoding.writeVarUint8Array(enc, sanitizedUpdate);
+          buf = Buffer.from(encoding.toUint8Array(enc));
+        }
+      } catch (awarenessErr) {
+        // If sanitization fails, fall back to original buf but coordinator will sanitize again
+        logger.debug({ err: awarenessErr.message }, "Awareness sanitization pre-check failed");
+      }
       const response = handleYjsMessage(doc, awareness, buf, ws);
       if (response && ws.readyState === WebSocket.OPEN) {
         ws.send(response);
@@ -234,8 +285,9 @@ async function handleUpgrade(req, socket, head) {
   const collabMatch = pathname.match(/^\/collab\/([^/]+)$/);
   if (collabMatch) {
     const roomKey = collabMatch[1];
+    let auth;
     try {
-      await authenticate(token, roomKey);
+      auth = await authenticate(token, roomKey);
     } catch (err) {
       logger.warn({ err: err.message, roomKey }, "Yjs collab auth rejected");
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
@@ -243,6 +295,11 @@ async function handleUpgrade(req, socket, head) {
       return;
     }
     collabWss.handleUpgrade(req, socket, head, (ws) => {
+      // Attach authenticated user to socket for awareness validation (only allow name from auth)
+      ws.user = auth.decoded ? { ...auth.decoded, name: auth.decoded.userName || auth.decoded.name || auth.decoded.id } : null;
+      ws.decoded = auth.decoded;
+      ws.authName = auth.decoded?.userName || auth.decoded?.name || null;
+      ws.session = auth.session;
       collabWss.emit("connection", ws, req, roomKey);
     });
     return;
@@ -252,8 +309,9 @@ async function handleUpgrade(req, socket, head) {
   const whiteboardMatch = pathname.match(/^\/whiteboard\/([^/]+)$/);
   if (whiteboardMatch) {
     const roomKey = whiteboardMatch[1];
+    let auth;
     try {
-      await authenticate(token, roomKey);
+      auth = await authenticate(token, roomKey);
     } catch (err) {
       logger.warn({ err: err.message, roomKey }, "Yjs whiteboard auth rejected");
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
@@ -261,6 +319,10 @@ async function handleUpgrade(req, socket, head) {
       return;
     }
     whiteboardWss.handleUpgrade(req, socket, head, (ws) => {
+      ws.user = auth.decoded ? { ...auth.decoded, name: auth.decoded.userName || auth.decoded.name || auth.decoded.id } : null;
+      ws.decoded = auth.decoded;
+      ws.authName = auth.decoded?.userName || auth.decoded?.name || null;
+      ws.session = auth.session;
       whiteboardWss.emit("connection", ws, req, roomKey);
     });
     return;

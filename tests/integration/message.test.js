@@ -90,4 +90,34 @@ describe("Message API Integration Tests", () => {
       expect(res.statusCode).toBe(403);
     });
   });
+
+  describe("GET /api/messages/application/:applicationId/summary", () => {
+    it("should return an AI summary for a conversation participant", async () => {
+      await Message.create({
+        application: application._id,
+        sender: seeker._id,
+        recipient: recruiter._id,
+        text: "Hello! I'm excited about this role."
+      });
+
+      const res = await request(app)
+        .get(`/api/messages/application/${application._id}/summary`)
+        .set("Authorization", `Bearer ${getAuthToken(recruiter)}`);
+
+      expect(res.statusCode).toBe(200);
+      expect(typeof res.body.summary).toBe("string");
+      expect(Array.isArray(res.body.highlights)).toBe(true);
+      expect(res.body.messageCount).toBe(1);
+    });
+
+    it("should deny summary access to non-participants", async () => {
+      const interloper = await createTestUser();
+
+      const res = await request(app)
+        .get(`/api/messages/application/${application._id}/summary`)
+        .set("Authorization", `Bearer ${getAuthToken(interloper)}`);
+
+      expect(res.statusCode).toBe(403);
+    });
+  });
 });

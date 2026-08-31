@@ -2,10 +2,12 @@ const mongoose = require("mongoose");
 const Application = require("../models/Application");
 const Message = require("../models/Message");
 const logger = require("../config/logger");
+const sanitizeHtml = require("sanitize-html");
 const { getIO } = require("../infrastructure/realtime/socketio");
 const { publishDomainEvent } = require("../infrastructure/events/domainEvents");
 const { defaultRRFEngine } = require("../modules/search/rrfEngine");
 const { generateLinkedInSmartReplies } = require("../modules/messages/smartReplyEngine");
+const aiService = require("../modules/ai/aiService");
 
 /**
  * Get all conversations for the logged-in user with latest message, unread count & interview link
@@ -321,6 +323,67 @@ exports.getApplicationSmartReplies = async (req, res) => {
   }
 };
 
+/**
+ * Generate an Instagram-style AI summary of an application conversation thread
+ */
+exports.summarizeApplicationConversation = async (req, res) => {
+  try {
+    const application = await Application.findById(req.params.applicationId)
+      .select("recruiter seeker job status")
+      .populate("seeker", "name role")
+      .populate("recruiter", "name role")
+      .populate("job", "title company")
+      .lean();
+    if (!application) {
+      return res.status(404).json({ msg: "Conversation not found." });
+    }
+
+    const userId = String(req.user._id);
+    const isParticipant =
+      String(application.seeker?._id || application.seeker) === userId ||
+      String(application.recruiter?._id || application.recruiter) === userId;
+    if (!isParticipant) {
+      return res.status(403).json({ msg: "You do not have access to this conversation." });
+    }
+
+    const messages = await Message.find({ application: application._id })
+      .populate("sender", "name role")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    if (!messages.length) {
+      return res.json({
+        summary: "",
+        highlights: [],
+        messageCount: 0,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
+    const seekers = application.seeker?.name || "Candidate";
+    const recruiter = application.recruiter?.name || "Recruiter";
+
+    const result = await aiService.summarizeConversation({
+      messages,
+      participants: { seeker: seekers, recruiter },
+      jobContext: {
+        title: application.job?.title || "",
+        company: application.job?.company || "",
+      },
+    });
+
+    res.json({
+      summary: result?.summary || "",
+      highlights: Array.isArray(result?.highlights) ? result.highlights : [],
+      messageCount: messages.length,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error({ err: error.message }, "Failed to summarize conversation");
+    res.status(500).json({ msg: "Failed to summarize conversation." });
+  }
+};
+
 async function findParticipantApplication(applicationId, userId) {
   if (!mongoose.Types.ObjectId.isValid(applicationId)) return null;
   const application = await Application.findById(applicationId).select("recruiter seeker").lean();
@@ -332,7 +395,10 @@ async function findParticipantApplication(applicationId, userId) {
 }
 
 function cleanMessageText(value) {
-  return typeof value === "string"
-    ? value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim()
-    : "";
+  if (typeof value !== "string") return "";
+  const sanitized = sanitizeHtml(value, {
+    allowedTags: [], // Strip all HTML tags
+    allowedAttributes: {},
+  });
+  return sanitized.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim();
 }

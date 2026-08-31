@@ -21,16 +21,17 @@ const {
 
 const blockRoutes = require("./block.routes");
 
+const { rateLimitMiddleware, aiLimiter } = require("../middleware/rateLimiter.middleware");
 router.use("/blocks", blockRoutes);
 router.post("/", auth, role("recruiter"), createJob);
-router.post("/ai-generate", auth, role("recruiter"), generateJob);
-router.post("/candidate-pool-preview", auth, role("recruiter"), candidatePoolPreview);
-router.post("/flag-requirements", auth, role("recruiter"), flagRequirements);
-router.post("/health-score", auth, role("recruiter"), getHealthScore);
-router.post("/predict-fill", auth, role("recruiter"), predictTimeToFill);
-router.post("/dei-rewrite", auth, role("recruiter"), deiRewrite);
-router.post("/market-compare", auth, role("recruiter"), marketCompare);
-router.post("/predict-questions", auth, role("recruiter"), predictQuestions);
+router.post("/ai-generate", auth, role("recruiter"), rateLimitMiddleware(aiLimiter, (req) => req.user?._id?.toString() || req.ip), generateJob);
+router.post("/candidate-pool-preview", auth, role("recruiter"), rateLimitMiddleware(aiLimiter, (req) => req.user?._id?.toString() || req.ip), candidatePoolPreview);
+router.post("/flag-requirements", auth, role("recruiter"), rateLimitMiddleware(aiLimiter, (req) => req.user?._id?.toString() || req.ip), flagRequirements);
+router.post("/health-score", auth, role("recruiter"), rateLimitMiddleware(aiLimiter, (req) => req.user?._id?.toString() || req.ip), getHealthScore);
+router.post("/predict-fill", auth, role("recruiter"), rateLimitMiddleware(aiLimiter, (req) => req.user?._id?.toString() || req.ip), predictTimeToFill);
+router.post("/dei-rewrite", auth, role("recruiter"), rateLimitMiddleware(aiLimiter, (req) => req.user?._id?.toString() || req.ip), deiRewrite);
+router.post("/market-compare", auth, role("recruiter"), rateLimitMiddleware(aiLimiter, (req) => req.user?._id?.toString() || req.ip), marketCompare);
+router.post("/predict-questions", auth, role("recruiter"), rateLimitMiddleware(aiLimiter, (req) => req.user?._id?.toString() || req.ip), predictQuestions);
 router.get("/coaching-stats", auth, role("recruiter"), getCoachingStats);
 router.get("/search", auth, searchJobs);
 router.get("/", auth, getJobs);

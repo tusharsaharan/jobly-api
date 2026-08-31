@@ -2,14 +2,24 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  email: { 
+    type: String, 
+    required: true, 
+    unique: true, 
+    lowercase: true, 
+    trim: true,
+    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please fill a valid email address']
+  },
   password: { type: String, required: true },
   role: {
     type: String,
     enum: ["seeker", "recruiter"],
     default: "seeker",
   },
-  skills: [{ type: String, trim: true }],
+  skills: {
+    type: [{ type: String, trim: true, maxlength: 80 }],
+    validate: [array => array.length <= 50, 'Exceeds maximum allowed skills (50)']
+  },
   resumeText: { type: String },
   resumeSummary: { type: String },
   degree: { type: String, trim: true },
@@ -25,9 +35,11 @@ const userSchema = new mongoose.Schema({
   currentStreak: { type: Number, default: 0 },
   lastFocusDate: { type: Date, default: null },
   codeforcesHandle: { type: String, trim: true, default: null },
+  tenantId: { type: String, required: true, default: "default", index: true },
 }, { timestamps: true });
 
-userSchema.index({ role: 1 });
+userSchema.index({ role: 1, skills: 1 });
+userSchema.index({ skills: 1 });
 
 userSchema.methods.toJSON = function () {
   const obj = this.toObject();

@@ -86,39 +86,92 @@ async function processResumeJob(jobData) {
   }
 
   let text = "";
-  let sha256 = "0".repeat(64);
+  let sha256 = null;
+  let pdfParseError = null;
   try {
     let buffer = fileBuffer ? Buffer.from(fileBuffer, "base64") : null;
     if (!buffer && s3Key) {
-      const stream = await getFileStream(s3Key);
-      buffer = await streamToBuffer(stream);
+      try {
+        const stream = await getFileStream(s3Key);
+        buffer = await streamToBuffer(stream);
+      } catch (s3Err) {
+        logger.error({ err: s3Err.message, userId, s3Key }, "S3 fetch failed - no fallback zeros");
+        throw new Error(`S3 fetch failed: ${s3Err.message}`);
+      }
     }
 
-    if (buffer) {
-      sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+    if (!buffer) {
+      throw new Error("No file buffer available and S3 fetch failed");
     }
 
-    if (originalName === "mock-resume.pdf") {
-      text = "John Seeker Resume. Skills: javascript, nodejs, react, express, mongodb. CGPA: 8.5. Tier 1 college. Experience: 2 years. B.Tech Computer Science degree.";
-    } else if (buffer) {
+    // Always compute real sha256, never store "0"*64
+    sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+
+    // Properly parse PDF; distinguish encrypted vs image-only
+    try {
       const parsedData = await pdfParse(buffer);
-      text = parsedData.text;
+      text = parsedData.text || "";
+    } catch (parseErr) {
+      pdfParseError = parseErr;
+      if (/encrypt|password|encrypted/i.test(parseErr.message)) {
+        logger.error({ err: parseErr.message, userId }, "Encrypted PDF detected");
+        sseManager.sendToUser(userId, "resume.failed", {
+          error: "Encrypted PDF is not supported. Please upload an unprotected PDF.",
+        });
+        if (uploadId) {
+          await ResumeUpload.findOneAndUpdate(
+            { uploadId },
+            { state: "failed", errorMessage: "Encrypted PDF not supported", progress: 100 }
+          ).catch(() => {});
+        }
+        return { success: false, error: "Encrypted PDF not supported. Please upload an unprotected PDF." };
+      }
+      logger.error({ err: parseErr.message, userId }, "PDF parse failed - likely image-only scanned PDF");
+      text = "";
     }
   } catch (err) {
-    logger.error({ err: err.message, userId }, "PDF parse text extraction failed");
+    // If already handled encrypted case, it would have returned
+    if (!pdfParseError || !/encrypt|password|encrypted/i.test(pdfParseError.message)) {
+      logger.error({ err: err.message, userId }, "PDF text extraction failed");
+    }
+    // Ensure we do not proceed with zero hash; if sha256 still null, we will fail below as image-only/empty
+    if (!text) text = "";
+  }
+
+  // Ensure sha256 is valid hex (never "0"*64); if still null, generate from text fallback only if text exists else fail
+  if (!sha256) {
+    if (text && text.trim().length >= 30) {
+      sha256 = crypto.createHash("sha256").update(Buffer.from(text)).digest("hex");
+    } else {
+      // No buffer hash available and text empty -> fail rather than storing zeros
+      sseManager.sendToUser(userId, "resume.failed", {
+        error: "Failed to process PDF - could not compute file hash and no extractable text",
+      });
+      if (uploadId) {
+        await ResumeUpload.findOneAndUpdate(
+          { uploadId },
+          { state: "failed", errorMessage: "Missing file buffer and S3 failure", progress: 100 }
+        ).catch(() => {});
+      }
+      return { success: false, error: "Missing file buffer and S3 failure" };
+    }
   }
 
   if (!text || text.trim().length < 30) {
+    const isEncrypted = pdfParseError && /encrypt|password|encrypted/i.test(pdfParseError.message);
+    const errorMsg = isEncrypted
+      ? "Encrypted PDF is not supported. Please upload an unprotected PDF."
+      : "Could not extract readable text from PDF. Ensure the file is not scanned/image-based.";
     sseManager.sendToUser(userId, "resume.failed", {
-      error: "Could not extract readable text from PDF. Ensure the file is not scanned/image-based.",
+      error: errorMsg,
     });
     if (uploadId) {
       await ResumeUpload.findOneAndUpdate(
         { uploadId },
-        { state: "failed", errorMessage: "Empty or unreadable text", progress: 100 }
+        { state: "failed", errorMessage: isEncrypted ? "Encrypted PDF not supported" : "Empty or unreadable text - possibly image-only scanned PDF", progress: 100 }
       ).catch(() => {});
     }
-    return { success: false, error: "Text extraction empty" };
+    return { success: false, error: isEncrypted ? "Encrypted PDF not supported" : "Text extraction empty - possibly image-only scanned PDF" };
   }
 
   // Step 2: AI Parsing & Structured Extraction

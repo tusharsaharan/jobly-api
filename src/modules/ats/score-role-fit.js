@@ -1,9 +1,77 @@
-const { resolveSkill, extractSkillsFromText } = require("./normalize");
+const { resolveSkill, extractSkillsFromText, normalizeText } = require("./normalize");
 const { createEvidenceRef, findEvidenceInProfile, getRulesetHash } = require("./evidence");
 const { buildRoleFitSuggestions } = require("./suggestion-builder");
+const { estimateExperienceYears } = require("../../utils/jobLogic");
 
 const ATS_ANALYSIS_VERSION = "ats-analysis/2026-08-v1";
 const TAXONOMY_VERSION = "skills-taxonomy/2026-08-v1";
+
+/**
+ * Extract meaningful keywords from a responsibility phrase for matching.
+ * Uses skill taxonomy + action verbs + technical nouns.
+ */
+function extractResponsibilityKeywords(phrase) {
+  if (!phrase || typeof phrase !== "string") return [];
+  const normalized = normalizeText(phrase);
+  
+  // Get skills mentioned in the phrase
+  const skills = extractSkillsFromText(phrase).map(s => s.matchedAlias || s.label);
+  
+  // Extract action verbs and technical terms (words > 3 chars, not common stop words)
+  const stopWords = new Set([
+    "the", "and", "for", "with", "from", "this", "that", "will", "have", "has", "had",
+    "you", "your", "our", "are", "was", "were", "been", "being", "they", "their",
+    "design", "develop", "implement", "build", "create", "manage", "lead", "drive",
+    "work", "worked", "working", "use", "used", "using", "make", "made", "making"
+  ]);
+  
+  const words = normalized
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !stopWords.has(w) && /^[a-z]+$/.test(w));
+  
+  // Combine skills + meaningful words, deduplicate
+  const keywords = [...new Set([...skills, ...words])];
+  return keywords;
+}
+
+/**
+ * Check if a bullet matches a responsibility phrase using keyword overlap + skill taxonomy.
+ */
+function bulletMatchesResponsibility(bullet, phrase) {
+  const keywords = extractResponsibilityKeywords(phrase);
+  if (keywords.length === 0) return false;
+  
+  const lowerBullet = bullet.toLowerCase();
+  let matchCount = 0;
+  
+  for (const kw of keywords) {
+    if (kw.includes("+") || kw.includes("#") || kw.includes(".")) {
+      const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(?:^|[^a-zA-Z0-9])${escaped}(?:$|[^a-zA-Z0-9])`, "i");
+      if (regex.test(lowerBullet)) matchCount++;
+    } else {
+      const regex = new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+      if (regex.test(lowerBullet)) matchCount++;
+    }
+  }
+  
+  // Require at least 40% keyword match or at least 1 skill match
+  const skillKeywords = extractSkillsFromText(phrase);
+  const hasSkillMatch = skillKeywords.some(s => {
+    const alias = s.matchedAlias || s.label;
+    if (alias.includes("+") || alias.includes("#") || alias.includes(".")) {
+      const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(?:^|[^a-zA-Z0-9])${escaped}(?:$|[^a-zA-Z0-9])`, "i");
+      return regex.test(lowerBullet);
+    } else {
+      const regex = new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+      return regex.test(lowerBullet);
+    }
+  });
+  
+  const keywordMatchRatio = matchCount / Math.max(keywords.length, 1);
+  return keywordMatchRatio >= 0.4 || hasSkillMatch;
+}
 
 /**
  * Deterministic calculation of Job-Fit ATS Analysis
@@ -19,17 +87,17 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
   const categories = [];
 
   // ==========================================
-  // 1. Required Skills Evidence (Max 30 pts)
+  // 1. Required Skills Evidence (Max 35 pts)
   // ==========================================
   const mustHaves = Array.isArray(jobAtsProfile.mustHaveSkills) ? jobAtsProfile.mustHaveSkills : [];
   let reqSkillScore = 0;
-  let reqSkillMax = 30;
+  let reqSkillMax = 35;
   let reqSkillRedistributed = false;
   let reqSkillMatchedCount = 0;
   const reqSkillEvidenceIds = [];
 
   if (mustHaves.length === 0) {
-    // Redistribute 30 points to preferred skills (+15) and responsibilities (+15)
+    // Redistribute 35 points: preferred skills (+20) and responsibilities (+15) to reach 30 each
     reqSkillRedistributed = true;
     reqSkillMax = 0;
     reqSkillScore = 0;
@@ -78,7 +146,7 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
       }
     }
 
-    reqSkillScore = totalWeight > 0 ? (earnedWeight / totalWeight) * 30 : 30;
+    reqSkillScore = totalWeight > 0 ? (earnedWeight / totalWeight) * reqSkillMax : reqSkillMax;
   }
 
   categories.push({
@@ -98,10 +166,10 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
   });
 
   // ==========================================
-  // 2. Preferred Skills & Terminology (Max 15 + redist)
+  // 2. Preferred Skills & Terminology (Max 10 + redist)
   // ==========================================
   const preferredSkills = Array.isArray(jobAtsProfile.preferredSkills) ? jobAtsProfile.preferredSkills : [];
-  const prefMax = reqSkillRedistributed ? 30 : 15;
+  const prefMax = reqSkillRedistributed ? 30 : 10;
   let prefScore = 0;
   let prefMatchedCount = 0;
   const prefEvidenceIds = [];
@@ -171,16 +239,16 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
   });
 
   // ==========================================
-  // 3. Relevant Experience & Seniority (Max 20 pts)
+  // 3. Relevant Experience & Seniority (Max 15 pts)
   // ==========================================
   const experienceEntries = Array.isArray(resumeProfile.experience) ? resumeProfile.experience : [];
   const minYearsRequired = jobAtsProfile.minimumExperienceYears || 0;
   let expScore = 0;
-  const expMax = 20;
+  const expMax = 15;
   const expEvidenceIds = [];
 
-  // Calculate approximate years of experience from entries
-  const totalYears = experienceEntries.length * 1.5; // Baseline heuristic from dated roles
+  // Calculate real years of experience from dated roles
+  const totalYears = estimateExperienceYears(experienceEntries);
   const yearsMet = minYearsRequired > 0 ? Math.min(totalYears / minYearsRequired, 1.0) : 1.0;
 
   // Title matching against targetTitles
@@ -210,7 +278,7 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
     }
   }
 
-  expScore = (yearsMet * 12) + (titleMatchBonus > 0 ? 8 : (experienceEntries.length > 0 ? 5 : 0));
+  expScore = (yearsMet * 9) + (titleMatchBonus > 0 ? 6 : (experienceEntries.length > 0 ? 4 : 0));
   expScore = Math.min(expScore, expMax);
 
   categories.push({
@@ -245,8 +313,7 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
 
   if (respPhrases.length > 0) {
     for (const phrase of respPhrases) {
-      const lowerPhrase = phrase.toLowerCase();
-      const match = allBullets.find((b) => b.toLowerCase().includes(lowerPhrase));
+      const match = allBullets.find((b) => bulletMatchesResponsibility(b, phrase));
       if (match) {
         respMatchedCount++;
         const evId = `resp-ev-${respEvidenceIds.length}`;
@@ -261,6 +328,17 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
           matchedSource: "experience",
           matchedText: match,
           evidenceRef: createEvidenceRef("experience", match),
+        });
+      } else {
+        gaps.push({
+          id: `gap-resp-${phrase.slice(0, 20).replace(/\s+/g, '-')}-${gaps.length}`,
+          requirementKey: `resp-${phrase.slice(0, 30)}`,
+          category: "responsibilities",
+          label: phrase,
+          isMustHave: false,
+          importance: "recommended",
+          explanation: `Responsibility theme '${phrase}' was not evidenced in experience or project bullets.`,
+          suggestedAction: `If accurate, add bullet demonstrating experience with '${phrase}'.`,
         });
       }
     }
@@ -384,15 +462,15 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
   });
 
   // ==========================================
-  // 7. ATS Readability & Completeness (Max 5 pts)
+  // 7. ATS Readability & Completeness (Max 10 pts)
   // ==========================================
-  let readabilityScore = 5;
+  let readabilityScore = 10;
   const sections = Array.isArray(resumeProfile.sectionsDetected) ? resumeProfile.sectionsDetected : [];
   if (!sections.includes("experience") && !sections.includes("skills")) {
-    readabilityScore -= 2;
+    readabilityScore -= 4;
   }
   if (!resumeProfile.contact?.email) {
-    readabilityScore -= 1;
+    readabilityScore -= 2;
   }
   readabilityScore = Math.max(readabilityScore, 1);
 
@@ -400,12 +478,12 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
     name: "ats_readability",
     label: "ATS Readability & Hygiene",
     score: readabilityScore,
-    maxPoints: 5,
-    percentage: Math.round((readabilityScore / 5) * 100),
-    weight: 5,
+    maxPoints: 10,
+    percentage: Math.round((readabilityScore / 10) * 100),
+    weight: 10,
     explanation: "Standard document sections, clean contact info, and clear structure.",
     matchedCount: sections.length,
-    totalCount: 5,
+    totalCount: 6,
     evidenceIds: [],
     redistributed: false,
   });
@@ -413,11 +491,13 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
   // ==========================================
   // Overall Score Calculation (Exact 0..100 sum)
   // ==========================================
-  const rawTotal = categories.reduce((sum, cat) => sum + cat.score, 0);
-  const overallScore = Math.min(Math.max(Math.round(rawTotal), 0), 100);
+  const rawTotal = categories.reduce((sum, cat) => sum + (Number.isFinite(cat?.score) ? cat.score : 0), 0);
+  const safeRawTotal = Number.isFinite(rawTotal) ? rawTotal : 0;
+  const computedScore = Math.round(safeRawTotal);
+  const overallScore = Number.isNaN(computedScore) ? 0 : Math.min(Math.max(computedScore, 0), 100);
 
-  // Confidence calculation (based on data completeness)
-  const confidence = resumeProfile.source?.extractionConfidence || 0.85;
+  // Confidence calculation (based on data completeness) — use nullish coalescing to preserve 0
+  const confidence = resumeProfile.source?.extractionConfidence ?? 0.85;
 
   // Build actionable suggestions
   const suggestions = buildRoleFitSuggestions(categories, gaps, matchedRequirements);
@@ -429,7 +509,7 @@ function scoreRoleFit({ resumeProfile, jobAtsProfile, jobId = null, applicationI
     resumeUploadId: resumeUploadId || "upload-default",
     resumeHash: resumeHash || (resumeProfile.source?.sha256 || "0000000000000000000000000000000000000000000000000000000000000000"),
     jobId: jobId || null,
-    jobRevision: 1,
+    jobRevision: jobId ? 1 : null,
     calculatedAt: new Date().toISOString(),
     status: "completed",
     overallScore,

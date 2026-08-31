@@ -3,12 +3,14 @@ const router = express.Router();
 const authMiddleware = require("../middleware/auth.middleware");
 const roleMiddleware = require("../middleware/role.middleware");
 const interviewController = require("../controllers/interview.controller");
+const { rateLimitMiddleware, generalLimiter } = require("../middleware/rateLimiter.middleware");
 const {
   validateBody,
   scheduleInterviewSchema,
   updateStageSchema,
   executeCodeSchema,
 } = require("../middleware/validation.middleware");
+const executeLimiter = generalLimiter;
 
 // All interview endpoints require valid authentication
 router.use(authMiddleware);
@@ -35,12 +37,24 @@ router.post("/invites/accept/:token", interviewController.acceptInterviewInvite)
 router.get("/:sessionId", interviewController.getInterviewSession);
 router.post("/:sessionId/invites", roleMiddleware("recruiter"), interviewController.createInterviewInvite);
 
-// Execute candidate code in sandbox
+// Execute candidate code in sandbox — rate limited to prevent sandbox spam
 router.post(
   "/:sessionId/execute",
+  rateLimitMiddleware(executeLimiter, (req) => req.user?._id?.toString() || req.ip),
   validateBody(executeCodeSchema),
   interviewController.executeCodeInSession
 );
+
+// Run code against multiple test cases (VS Code / LeetCode style)
+const { runTestsSchema } = require("../middleware/validation.middleware");
+router.post(
+  "/:sessionId/run-tests",
+  rateLimitMiddleware(executeLimiter, (req) => req.user?._id?.toString() || req.ip),
+  interviewController.runTestsInSession
+);
+
+// Inject mock socket event (for e2e testing only)
+router.post("/:sessionId/test-inject-socket", interviewController.injectTestSocketEvent);
 
 // AI Co-Interviewer real-time suggestion (Recruiter only)
 router.post("/:sessionId/ai-suggest", roleMiddleware("recruiter"), interviewController.getAiSuggestion);
@@ -70,9 +84,10 @@ router.put("/:sessionId/status", roleMiddleware("recruiter"), interviewControlle
 router.post("/:sessionId/livekit-token", interviewController.getLiveKitToken);
 
 // Video / Audio recording storage
-const videoUpload = require("../middleware/videoUpload.middleware");
+const { videoUpload } = require("../middleware/videoUpload.middleware");
 router.post("/:sessionId/recording", videoUpload.single("video"), interviewController.uploadInterviewRecording);
 router.get("/:sessionId/recording", interviewController.getInterviewRecording);
+router.get("/:sessionId/recording/presigned", interviewController.getRecordingPresignedUrl);
 
 module.exports = router;
 

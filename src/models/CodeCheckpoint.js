@@ -22,7 +22,6 @@ const codeCheckpointSchema = new mongoose.Schema(
       type: String,
       enum: ["EXECUTION", "STAGE_TRANSITION", "AUTO_SAVE", "MANUAL"],
       required: true,
-      index: true,
     },
     triggerLabel: {
       type: String,
@@ -41,7 +40,6 @@ const codeCheckpointSchema = new mongoose.Schema(
       required: true,
       default: 0,
       min: 0,
-      index: true,
     },
     sequenceNumber: {
       type: Number,
@@ -53,6 +51,6 @@ const codeCheckpointSchema = new mongoose.Schema(
 
 codeCheckpointSchema.index({ session: 1, offsetMs: 1, sequenceNumber: 1 });
 codeCheckpointSchema.index({ session: 1, sequenceNumber: 1 });
-codeCheckpointSchema.index({ session: 1, createdAt: 1 });
+codeCheckpointSchema.index({ createdAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 }); // 30 days TTL
 
 module.exports = mongoose.model("CodeCheckpoint", codeCheckpointSchema);

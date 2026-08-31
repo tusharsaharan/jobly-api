@@ -15,12 +15,18 @@ const candidateTopicWeaknessSchema = new mongoose.Schema({
   // Resolution tracking
   resolved:   { type: Boolean, default: false },
   resolvedAt: { type: Date },
+  resolvedVia: { type: String, enum: ["manual", "quiz", null], default: null },
+  resolvedScore: { type: Number, min: 0, max: 100 },
 
-  // Cached study resource recommendations (refreshed periodically)
+  // Cached study resource recommendations — precise (RAG) + extensive (curated by type)
   cachedResources: [{
     title:       String,
     url:         String,
     description: String,
+    type:        { type: String, enum: ["rag","article","practice","video","search","docs"], default: "rag" },
+    score:       Number, // Hybrid RRF score 0-0.98
+    confidence:  { type: String, enum: ["high", "medium", "low", "none"] },
+    relevancePct: Number, // 0-98
     retrievedAt: Date,
   }],
 }, { timestamps: true });

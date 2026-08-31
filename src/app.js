@@ -66,10 +66,13 @@ app.use(mongoSanitize());
 // 7. Controlled CORS
 app.use(cors({
   origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    // and explicitly allow localhost origins
     if (!origin || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
       return callback(null, true);
     }
-    return callback(null, origin);
+    // Reject all other origins (fixes arbitrary origin reflection)
+    return callback(new Error("Not allowed by CORS"));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "x-request-id"],
@@ -112,9 +115,10 @@ app.use("/api/learn", learnRoutes);
 app.use("/api/compete", competitionRoutes);
 app.use("/api/study", studyRoutes);
 
-// Static uploads serving (Video recordings, resumes, assets)
+// Static uploads serving (Video recordings, resumes, assets) — protected via auth to prevent IDOR
 const path = require("path");
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+const authMiddleware = require("./middleware/auth.middleware");
+app.use("/uploads", authMiddleware, express.static(path.join(__dirname, "../uploads"), { index: false, redirect: false }));
 
 // Global Error Handler
 app.use((err, req, res, next) => {

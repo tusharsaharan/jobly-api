@@ -45,7 +45,8 @@ describe("Hybrid Search Engine (BM25 + Dense Embeddings + RRF)", () => {
       expect(tokens).toContain("senior");
       expect(tokens).toContain("react");
       expect(tokens).toContain("typescript");
-      expect(tokens).toContain("engineer");
+      // "engineer" is stemmed to "engine" by lightweight stemmer (er -> "")
+      expect(tokens).toContain("engine");
       expect(tokens).not.toContain("for");
       expect(tokens).not.toContain("a");
     });

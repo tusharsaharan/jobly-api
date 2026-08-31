@@ -33,6 +33,13 @@ async function ingestTelemetry(req, res) {
     if (!sessionId || !eventType) {
       return res.status(400).json({ success: false, msg: "sessionId and eventType are required" });
     }
+    // Participant authorization
+    const sessionCheck = await InterviewSession.findById(sessionId).select("seeker recruiter additionalInterviewers tenantId").lean();
+    if (!sessionCheck) return res.status(404).json({ success: false, msg: "Interview session not found" });
+    const uidIng = String(req.user?._id);
+    const isPartIng = String(sessionCheck.seeker) === uidIng || String(sessionCheck.recruiter) === uidIng || (sessionCheck.additionalInterviewers || []).some((id) => String(id) === uidIng);
+    if (!isPartIng) return res.status(403).json({ success: false, msg: "Access denied." });
+    if (req.user?.tenantId && sessionCheck.tenantId && sessionCheck.tenantId !== req.user.tenantId) return res.status(403).json({ success: false, msg: "Tenant mismatch." });
 
     const participantId = req.user?._id;
     const participantRole = req.user?.role || "seeker";
@@ -136,6 +143,13 @@ async function checkSimilarity(req, res) {
 async function getSessionReport(req, res) {
   try {
     const { sessionId } = req.params;
+    // Participant authorization before leaking report
+    const sessionCheck = await InterviewSession.findById(sessionId).select("seeker recruiter additionalInterviewers tenantId").lean();
+    if (!sessionCheck) return res.status(404).json({ success: false, msg: "Interview session not found" });
+    const uidRep = String(req.user?._id);
+    const isPartRep = String(sessionCheck.seeker) === uidRep || String(sessionCheck.recruiter) === uidRep || (sessionCheck.additionalInterviewers || []).some((id) => String(id) === uidRep);
+    if (!isPartRep) return res.status(403).json({ success: false, msg: "Access denied." });
+    if (req.user?.tenantId && sessionCheck.tenantId && sessionCheck.tenantId !== req.user.tenantId) return res.status(403).json({ success: false, msg: "Tenant mismatch." });
 
     const events = await TimelineEvent.find({
       session: sessionId,

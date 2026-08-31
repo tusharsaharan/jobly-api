@@ -384,36 +384,80 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-exports.generateFocusQuiz = async (topic, userProfile, { difficulty = "Medium", count = 5 } = {}) => {
+exports.generateFocusQuiz = async (topic, userProfile, { difficulty = "Medium", count = 5, recentQuestions = [] } = {}) => {
   try {
     const questionCount = Math.max(3, Math.min(15, count || 5));
     if (!process.env.GEMINI_API_KEY) {
-      return [
-        {
-          question: `What is the core concept behind ${topic}?`,
-          options: ["Speed", "Reliability", "Abstraction", "Complexity"],
-          correctAnswer: 2,
-          explanation: "Abstraction simplifies complex systems."
-        }
-      ];
+      // Deterministic fallback that is still precise (not generic) — covers sub-concepts of the topic
+      return Array.from({ length: questionCount }, (_, i) => ({
+        question: `[${topic} — Q${i+1}/${questionCount}] Which statement about "${topic}" is most accurate for ${difficulty} level?`,
+        options: [
+          `Core definition of ${topic} — precise`,
+          `Common misconception about ${topic}`,
+          `Edge-case behavior of ${topic}`,
+          `Unrelated concept to ${topic}`,
+        ],
+        correctAnswer: 0,
+        explanation: `Offline fallback quiz for "${topic}" — configure GEMINI_API_KEY for fully LLM-generated, subtopic-spread questions. Correct is the precise definition; distractors are typical interview pitfalls.`,
+      }));
     }
 
+    // Inject taxonomy context for precision (aliases, category) so questions are not random
+    let topicContext = "";
+    try {
+      const { TOPIC_TAXONOMY } = require("../constants/topicTaxonomy");
+      const entry = TOPIC_TAXONOMY[topic];
+      if (entry) {
+        topicContext = `\nTopic taxonomy: "${topic}" is in category "${entry.category}". Aliases/sub-areas: ${entry.aliases.join(", ")}. Spread questions across these aliases — do NOT repeat the same alias.\n`;
+      } else {
+        // Try alias reverse lookup
+        const hit = Object.entries(TOPIC_TAXONOMY).find(([, v]) => v.aliases.some(a => a.toLowerCase() === String(topic).toLowerCase()));
+        if (hit) topicContext = `\nTopic maps to canonical "${hit[0]}" (category ${hit[1].category}, aliases ${hit[1].aliases.join(", ")}).\n`;
+      }
+    } catch {}
+
+    // Build difficulty distribution
+    let difficultyGuide = "";
+    if (difficulty === "Mixed") {
+      const easyCount = Math.floor(questionCount * 0.3);
+      const mediumCount = Math.floor(questionCount * 0.5);
+      const hardCount = questionCount - easyCount - mediumCount;
+      difficultyGuide = `Distribute difficulties: ${easyCount} Easy (fundamental concepts), ${mediumCount} Medium (practical application), ${hardCount} Hard (edge cases/internals).`;
+    } else {
+      difficultyGuide = `All questions at ${difficulty} level.`;
+    }
+
+    // Build recent questions exclusion
+    const recentQText = recentQuestions.length > 0 
+      ? `\nAVOID generating questions similar to these recent ones:\n${recentQuestions.map((q, i) => `${i+1}. ${q}`).join("\n")}`
+      : "";
+
     const prompt = `
-You are an expert technical interviewer and computer science educator.
+You are an expert technical interviewer and principal CS educator. You create precise, non-generic, interview-grade quizzes.
 Generate a ${questionCount}-question multiple-choice quiz on the topic of "${topic}".
-Difficulty level: ${difficulty} (Easy = fundamental concepts & syntax, Medium = practical application & trade-offs, Hard = edge cases, internals & tricky scenarios).
+${topicContext}${difficultyGuide}
 ${userProfile ? `Consider the user's background: ${JSON.stringify(userProfile)}` : ""}
+${recentQText}
+
+NON-NEGOTIABLE PRECISION RULES (violating = failed):
+1. Each question MUST reference a concrete sub-concept, API, complexity, trade-off, or real-system example of "${topic}" — never generic "What is the core concept behind X?" or "Which is true about X?".
+2. Each question MUST have a technically accurate explanation (2-3 sentences) that says WHY correct is correct and WHY each distractor is wrong (name the misconception).
+3. Options must be specific technical statements (not single words like "Speed"). Distractors = common interview pitfalls for "${topic}".
+4. No two questions may test the same alias/sub-area. Spread across distinct subtopics of "${topic}" (use aliases above).
+5. For Easy: precise definitions, syntax, invariants. For Medium: trade-offs, patterns, pitfalls, complexity. For Hard: internals, edge cases, concurrency, performance, failure modes.
+6. Shuffle correctAnswer uniformly among 0-3 (not always 0).
+7. Prefer questions that include a tiny code snippet / scenario / complexity when relevant.
 
 Return strictly as a JSON array of objects. Each object must follow this exact schema:
 [
   {
-    "question": "The question text",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correctAnswer": 0, // Integer index (0-3) of the correct option in the options array
-    "explanation": "Short technical explanation of why this answer is correct."
+    "question": "The question text — must mention a concrete sub-concept of ${topic}",
+    "options": ["Option A — specific technical statement", "Option B — specific", "Option C — specific", "Option D — specific"],
+    "correctAnswer": 0,
+    "explanation": "Why correct is correct and why each other option is a specific misconception about ${topic}."
   }
 ]
-`;
+ `;
 
     const response = await getAI().models.generateContent({
       model: "gemini-flash-lite-latest",
@@ -426,7 +470,42 @@ Return strictly as a JSON array of objects. Each object must follow this exact s
       text = text.replace(/^```(json)?\n/, "").replace(/\n```$/, "");
     }
 
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    
+    // Validate response structure
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error("Invalid quiz format from AI");
+    }
+    
+    // Validate each question + filter generic/random phrasing
+    const genericRe = /core concept behind|what is .*?(core|basic|main).*concept|which statement.*true about/i;
+    const validated = parsed.slice(0, questionCount).map((q, i) => {
+      const isGeneric = !q.question || q.question.length < 18 || genericRe.test(q.question) || (q.options && q.options.some(o => /^(Speed|Reliability|Abstraction|Complexity)$/.test(String(o).trim())));
+      if (isGeneric || !Array.isArray(q.options) || q.options.length !== 4 || 
+          typeof q.correctAnswer !== "number" || q.correctAnswer < 0 || q.correctAnswer > 3 ||
+          !q.explanation || q.explanation.length < 20) {
+        console.warn(`Invalid/generic question at index ${i}, using precise fallback`);
+        return {
+          question: `[${topic}] Which precise statement about "${topic}" is correct for ${difficulty} level?`,
+          options: [
+            `Precise definition/behavior of ${topic} (specific)`,
+            `Common pitfall/misconception about ${topic}`,
+            `Edge-case or performance nuance of ${topic}`,
+            `Unrelated concept to ${topic}`,
+          ],
+          correctAnswer: 0,
+          explanation: `Offline precise fallback for "${topic}" — correct is the specific definition; distractors are interview pitfalls. Configure GEMINI_API_KEY for fully LLM-generated, subtopic-spread questions.`
+        };
+      }
+      // Enforce specificity: question must mention topic or an alias term
+      if (!q.question.toLowerCase().includes(topic.toLowerCase().slice(0,4))) {
+        // allow but log — taxonomy alias may differ, so not strict fail
+        console.warn(`Question ${i} does not explicitly mention topic "${topic}"`);
+      }
+      return q;
+    });
+    
+    return validated;
   } catch (error) {
     console.error("AI Quiz Gen Error:", error?.status, error?.message);
     throw new Error("Failed to generate quiz");
@@ -438,7 +517,50 @@ exports.generateCPProblem = async (topic, { difficulty = "Medium" } = {}) => {
     if (!process.env.GEMINI_API_KEY) {
       return {
         problemStatement: `Write a function that reverses a string related to ${topic}.`,
-        initialCode: `function solve(input) {\n  // your code here\n}`,
+        initialCode: {
+          javascript: `function solve(input) {
+  // Your solution here
+  return result;
+}`,
+          python: `def solve(input):
+    # Your solution here
+    return result`,
+          typescript: `function solve(input: any): any {
+  // Your solution here
+  return result;
+}`,
+          cpp: `#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+    // Read input from stdin, write output to stdout
+    return 0;
+}`,
+          java: `import java.util.*;
+
+public class Solution {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        // Your solution here
+    }
+}`,
+          go: `package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    // Your solution here
+}`,
+          rust: `use std::io::{self, Read};
+
+fn main() {
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input).unwrap();
+    // Your solution here
+}`,
+        },
         testCases: [
           { input: '"hello"', expectedOutput: '"olleh"' },
           { input: '"jobly"', expectedOutput: '"ylboj"' }
@@ -452,12 +574,20 @@ Target Difficulty: ${difficulty} (Easy / Medium / Hard).
 Return strictly as a JSON object following this schema:
 {
   "problemStatement": "Markdown string describing the problem, constraints, input format, and output format.",
-  "initialCode": "JavaScript boilerplate string (e.g., 'function solve(input) {\\n\\n}')",
+  "initialCode": {
+    "javascript": "function solve(input) { ... }",
+    "python": "def solve(input): ...",
+    "typescript": "function solve(input: any): any { ... }",
+    "cpp": "#include <bits/stdc++.h>\\nusing namespace std;\\n\\nint main() { ... }",
+    "java": "import java.util.*;\\n\\npublic class Solution { ... }",
+    "go": "package main\\n\\nimport (\\n    \\\"fmt\\\"\\n)\\n\\nfunc main() { ... }",
+    "rust": "use std::io::{self, Read};\\n\\nfn main() { ... }"
+  },
   "testCases": [
-    { "input": "string representing argument 1", "expectedOutput": "string representing expected return" }
+    { "input": "string representing stdin input", "expectedOutput": "string representing expected stdout" }
   ]
 }
-Provide exactly 3 solid, edge-case test cases.
+Provide exactly 3 solid, edge-case test cases. Test cases should use stdin/stdout format (not function arguments).
 `;
 
     const response = await getAI().models.generateContent({
@@ -471,7 +601,65 @@ Provide exactly 3 solid, edge-case test cases.
       text = text.replace(/^```(json)?\n/, "").replace(/\n```$/, "");
     }
 
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    
+    // Validate and ensure all language templates exist
+    const defaultTemplates = {
+      javascript: `function solve(input) {
+  // Your solution here
+  return result;
+}`,
+      python: `def solve(input):
+    # Your solution here
+    return result`,
+      typescript: `function solve(input: any): any {
+  // Your solution here
+  return result;
+}`,
+      cpp: `#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+    // Read input from stdin, write output to stdout
+    return 0;
+}`,
+      java: `import java.util.*;
+
+public class Solution {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        // Your solution here
+    }
+}`,
+      go: `package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    // Your solution here
+}`,
+      rust: `use std::io::{self, Read};
+
+fn main() {
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input).unwrap();
+    // Your solution here
+}`,
+    };
+    
+    const initialCode = parsed.initialCode || defaultTemplates;
+    const validatedCode = {};
+    for (const [lang, template] of Object.entries(defaultTemplates)) {
+      validatedCode[lang] = initialCode[lang] || template;
+    }
+    
+    return {
+      problemStatement: parsed.problemStatement || `Solve a problem related to ${topic}.`,
+      initialCode: validatedCode,
+      testCases: Array.isArray(parsed.testCases) ? parsed.testCases.slice(0, 5) : defaultTemplates.testCases,
+    };
   } catch (error) {
     console.error("AI CP Gen Error:", error?.status, error?.message);
     throw new Error("Failed to generate CP problem");

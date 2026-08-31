@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const ResumeUploadSchema = new mongoose.Schema({
   uploadId: { type: String, required: true, unique: true, index: true },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true, sparse: true },
   fileName: { type: String, required: true },
   mimeType: { type: String, default: "application/pdf" },
   fileSize: { type: Number, default: 0 },
@@ -35,5 +36,8 @@ const ResumeUploadSchema = new mongoose.Schema({
 }, {
   timestamps: true,
 });
+
+ResumeUploadSchema.index({ sha256: 1, userId: 1 }, { unique: true });
+ResumeUploadSchema.index({ sha256: 1, owner: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model("ResumeUpload", ResumeUploadSchema);

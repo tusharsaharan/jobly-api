@@ -6,10 +6,11 @@ const TimelineEvent = require("../models/TimelineEvent");
  * Authorize participant for timeline access
  */
 async function authorizeParticipant(sessionIdOrRoomKey, user) {
+  const tenantFilter = user?.tenantId ? { tenantId: user.tenantId } : {};
   const session = await InterviewSession.findOne({
-    $or: [
-      { _id: sessionIdOrRoomKey.match(/^[0-9a-fA-F]{24}$/) ? sessionIdOrRoomKey : null },
-      { roomKey: sessionIdOrRoomKey },
+    $and: [
+      { $or: [{ _id: sessionIdOrRoomKey.match(/^[0-9a-fA-F]{24}$/) ? sessionIdOrRoomKey : null }, { roomKey: sessionIdOrRoomKey }] },
+      tenantFilter,
     ],
   }).populate("seeker recruiter additionalInterviewers");
 
@@ -54,29 +55,47 @@ exports.getTimelineEvents = async (req, res) => {
 
     const session = await authorizeParticipant(sessionId, req.user);
 
+    // Brutal hardening: sanitize numeric inputs, cap limits
+    let parsedLimit = parseInt(limit, 10);
+    if (Number.isNaN(parsedLimit) || parsedLimit < 1) parsedLimit = 100;
+    if (parsedLimit > 200) parsedLimit = 200;
+
+    let parsedOffset = parseInt(offset, 10);
+    if (Number.isNaN(parsedOffset) || parsedOffset < 0) parsedOffset = 0;
+
+    let parsedFrom = Number(from);
+    if (Number.isNaN(parsedFrom) || parsedFrom < 0) parsedFrom = 0;
+    let parsedTo = Number(to);
+    if (Number.isNaN(parsedTo) || parsedTo < 0) parsedTo = 999999999;
+    if (parsedFrom > parsedTo) parsedFrom = 0;
+
+    const validPipelines = ["COMMUNICATION", "CODING", "WHITEBOARD", "STAGE", "AI", "NOTE", "SYSTEM", "INTEGRITY"];
     const query = {
       session: session._id,
-      offsetMs: { $gte: Number(from), $lte: Number(to) },
+      offsetMs: { $gte: parsedFrom, $lte: parsedTo },
     };
 
-    if (pipeline) query.pipeline = pipeline.toUpperCase();
-    if (eventType) query.eventType = eventType;
-    if (participantId) query.participant = participantId;
+    if (pipeline) {
+      const upper = String(pipeline).toUpperCase();
+      if (validPipelines.includes(upper)) query.pipeline = upper;
+    }
+    if (eventType) query.eventType = String(eventType);
+    if (participantId && String(participantId).match(/^[0-9a-fA-F]{24}$/)) query.participant = participantId;
 
     const total = await TimelineEvent.countDocuments(query);
     const events = await TimelineEvent.find(query)
       .populate("participant", "name role email")
       .sort({ offsetMs: 1, createdAt: 1 })
-      .skip(Number(offset))
-      .limit(Number(limit))
+      .skip(parsedOffset)
+      .limit(parsedLimit)
       .lean();
 
     return res.json({
       events,
       total,
-      hasMore: Number(offset) + events.length < total,
-      offset: Number(offset),
-      limit: Number(limit),
+      hasMore: parsedOffset + events.length < total,
+      offset: parsedOffset,
+      limit: parsedLimit,
     });
   } catch (err) {
     logger.error({ err: err.message }, "Error fetching timeline events");
@@ -128,7 +147,9 @@ exports.getTimelineEventContext = async (req, res) => {
       return res.status(404).json({ msg: "Target event not found" });
     }
 
-    const windowSize = Number(window);
+    let windowSize = parseInt(window, 10);
+    if (Number.isNaN(windowSize) || windowSize < 1) windowSize = 5;
+    if (windowSize > 50) windowSize = 50;
 
     const beforeEvents = await TimelineEvent.find({
       session: session._id,
@@ -165,6 +186,9 @@ exports.getTimelineEventContext = async (req, res) => {
  * GET /api/timeline/:sessionId/search
  * Full text search across transcript, code, notes, and execution results
  */
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 exports.searchTimeline = async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -174,8 +198,23 @@ exports.searchTimeline = async (req, res) => {
       return res.status(400).json({ msg: "Search query 'q' parameter is required" });
     }
 
+    const trimmed = String(q).trim().slice(0, 200);
+    if (trimmed.length === 0) {
+      return res.status(400).json({ msg: "Search query 'q' parameter is required" });
+    }
+
+    let parsedLimit = parseInt(limit, 10);
+    if (Number.isNaN(parsedLimit) || parsedLimit < 1) parsedLimit = 50;
+    if (parsedLimit > 100) parsedLimit = 100;
+
     const session = await authorizeParticipant(sessionId, req.user);
-    const regex = new RegExp(q.trim(), "i");
+    const escaped = escapeRegExp(trimmed);
+    let regex;
+    try {
+      regex = new RegExp(escaped, "i");
+    } catch (e) {
+      return res.status(400).json({ msg: "Invalid search query" });
+    }
 
     // Multi-attribute search across payload text, codeSnippet, and eventType
     const results = await TimelineEvent.find({
@@ -189,7 +228,7 @@ exports.searchTimeline = async (req, res) => {
     })
       .populate("participant", "name role email")
       .sort({ offsetMs: 1 })
-      .limit(Number(limit))
+      .limit(parsedLimit)
       .lean();
 
     return res.json({

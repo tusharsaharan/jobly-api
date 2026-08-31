@@ -71,10 +71,25 @@ If no severe contradictions exist, return { "flags": [] }
 `;
 
       const result = await aiService.executeWithCascade(prompt, flagSchema, { preferredProvider: "gemini" });
-      return result.data?.flags || [];
+      if (!result.success || !result.data || !Array.isArray(result.data.flags)) {
+        logger.warn("Semantic flag cascade failed to produce valid flags");
+        return {
+          flags: [],
+          isUnavailable: true,
+          error: "AI semantic contradiction check is temporarily unavailable."
+        };
+      }
+      return {
+        flags: result.data.flags,
+        isUnavailable: false
+      };
     } catch (err) {
       logger.error({ err: err.message }, "Failed to get semantic flags");
-      return [];
+      return {
+        flags: [],
+        isUnavailable: true,
+        error: "AI semantic contradiction check is temporarily unavailable."
+      };
     }
   }
 }

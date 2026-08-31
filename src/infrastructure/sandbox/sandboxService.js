@@ -4,6 +4,108 @@ const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
 const logger = require("../../config/logger");
+const {
+  SECCOMP_BPF_PROFILE,
+  CGROUPS_V2_CONFIG,
+  generateContainerSecurityArgs,
+} = require("./sandboxSecurityProfile");
+
+// ─── Sandbox Security: Static Analysis Pre-check ─────────────────────────────
+const MAX_CODE_BYTES = 100000; // 100KB limit
+const NETWORK_ALLOWLIST = (process.env.SANDBOX_NETWORK_ALLOWLIST || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+// Blocked require/import patterns – brutally block host FS, process control, and network
+const BLOCKED_JS_PATTERNS = [
+  { pattern: /require\s*\(\s*['"]\s*fs\s*['"]\s*\)/i, reason: "require('fs') is blocked - host filesystem access denied" },
+  { pattern: /require\s*\(\s*['"]\s*child_process\s*['"]\s*\)/i, reason: "require('child_process') is blocked - process spawning denied" },
+  { pattern: /require\s*\(\s*['"]\s*net\s*['"]\s*\)/i, reason: "require('net') is blocked - network access denied" },
+  { pattern: /require\s*\(\s*['"]\s*dgram\s*['"]\s*\)/i, reason: "require('dgram') is blocked - network access denied" },
+  { pattern: /require\s*\(\s*['"]\s*http\s*['"]\s*\)/i, reason: "require('http') is blocked - network access denied" },
+  { pattern: /require\s*\(\s*['"]\s*https\s*['"]\s*\)/i, reason: "require('https') is blocked - network access denied" },
+  // Allow process.exit(0) / process.exit(1) for clean readline termination in tests; block bare process.exit() or non-zero weird usage still via timeout watchdog
+  // { pattern: /\bprocess\s*\.\s*exit\s*\(/i, reason: "process.exit is blocked - process termination denied" },
+  { pattern: /\bchild_process\b/i, reason: "child_process is blocked" },
+  { pattern: /\bexecSync\b|\bexec\s*\(\s*['"]/i, reason: "exec/execSync is blocked" },
+  { pattern: /\bspawnSync\b|\bfork\s*\(/i, reason: "spawnSync/fork is blocked" },
+  { pattern: /\bfs\s*\.\s*(readFile|writeFile|readFileSync|writeFileSync|createReadStream|createWriteStream|openSync|readdir)/i, reason: "fs read/write is blocked" },
+  // Socket/network generic
+  { pattern: /\bsocket\s*\.\s*connect\b|\bnet\.connect\b|\bnet\.createConnection\b/i, reason: "socket.connect is blocked - network egress denied" },
+  { pattern: /\bsocket\b.*\bconnect\b/i, reason: "socket usage is blocked" },
+  // Dynamic require / import bypasses
+  { pattern: /require\s*\(.*Buffer\.from/i, reason: "Dynamic require via Buffer is blocked" },
+  { pattern: /global\s*\.\s*process|this\s*\.\s*constructor|Function\s*\(/i, reason: "Global process/function constructor escape is blocked" },
+  { pattern: /\bimport\s*\(\s*['"]fs['"]\s*\)|\bimport\s*\(\s*['"]child_process['"]\s*\)/i, reason: "Dynamic import of fs/child_process blocked" },
+  { pattern: /__import__\s*\(\s*['"]os['"]\s*\)|getattr\s*\(\s*__import__/i, reason: "Python dynamic import escape blocked" },
+];
+const BLOCKED_PY_PATTERNS = [
+  { pattern: /\bimport\s+os\b/i, reason: "import os is blocked - host filesystem access denied" },
+  { pattern: /\bimport\s+socket\b/i, reason: "import socket is blocked - network access denied" },
+  { pattern: /\bimport\s+subprocess\b/i, reason: "import subprocess is blocked - process spawning denied" },
+  { pattern: /\bimport\s+sys\b.*\bexit\b/i, reason: "sys.exit is blocked" },
+  { pattern: /from\s+os\s+import/i, reason: "from os import is blocked" },
+  { pattern: /from\s+socket\s+import/i, reason: "from socket import is blocked" },
+  { pattern: /from\s+subprocess\s+import/i, reason: "from subprocess import is blocked" },
+  { pattern: /\bos\s*\.\s*(system|popen|exec|spawn|remove|unlink|listdir|mkdir|read|write)\s*\(/i, reason: "os.system/popen is blocked" },
+  { pattern: /\bsubprocess\s*\./i, reason: "subprocess is blocked" },
+  { pattern: /\bsocket\s*\.\s*socket\s*\(/i, reason: "socket.socket is blocked" },
+  { pattern: /\bsys\s*\.\s*exit\s*\(/i, reason: "sys.exit is blocked" },
+];
+
+const NETWORK_PATTERNS_JS = /\b(fetch\s*\(|axios\s*\(|http\.request|https\.request|net\.connect|socket\.connect|WebSocket\s*\()/i;
+const NETWORK_PATTERNS_PY = /\bsocket\.socket\b|\bconnect\s*\(\s*\(/i;
+
+function validateSandboxSecurity(language, code) {
+  const codeStr = String(code || "");
+  // 1) Size limit 100KB
+  if (Buffer.byteLength(codeStr, "utf8") > MAX_CODE_BYTES) {
+    return `Code exceeds 100KB limit (${Buffer.byteLength(codeStr, "utf8")} bytes > ${MAX_CODE_BYTES})`;
+  }
+  const lang = (language || "").toLowerCase();
+  const patterns = lang === "python" ? BLOCKED_PY_PATTERNS : BLOCKED_JS_PATTERNS.concat(BLOCKED_PY_PATTERNS);
+  // For python only check py patterns, for js check js patterns plus generic
+  const activePatterns = lang === "python" ? BLOCKED_PY_PATTERNS : BLOCKED_JS_PATTERNS;
+  for (const { pattern, reason } of activePatterns) {
+    if (pattern.test(codeStr)) {
+      return reason;
+    }
+  }
+  // Also block cross-language dangerous imports even if language mismatch (e.g., python code pasted as javascript)
+  // Check all patterns regardless
+  for (const { pattern, reason } of [...BLOCKED_JS_PATTERNS, ...BLOCKED_PY_PATTERNS]) {
+    if (pattern.test(codeStr)) {
+      // For generic safety, if any blocked pattern matches, block
+      // But allow innocent words like "socket" inside comments? keep strict for security
+      return reason;
+    }
+  }
+  // Network allowlist check: if network pattern found and not allowlisted, block
+  if (NETWORK_ALLOWLIST.length === 0) {
+    if (NETWORK_PATTERNS_JS.test(codeStr) || NETWORK_PATTERNS_PY.test(codeStr)) {
+      // Require explicit allowlist; empty means no network
+      // Check if code actually tries network; we already blocked socket, but fetch/http still needed
+      if (/fetch\s*\(|http\.request|https\.request|socket/i.test(codeStr)) {
+        return "Network access is blocked - no hosts in SANDBOX_NETWORK_ALLOWLIST";
+      }
+    }
+  } else {
+    // If allowlist exists, ensure requested host is in list (simple heuristic)
+    // For now block all if no allowlist match – strict
+    const hasNetwork = NETWORK_PATTERNS_JS.test(codeStr) || NETWORK_PATTERNS_PY.test(codeStr);
+    if (hasNetwork) {
+      const allowed = NETWORK_ALLOWLIST.some((host) => codeStr.includes(host));
+      if (!allowed) {
+        return `Network access to host not in allowlist [${NETWORK_ALLOWLIST.join(", ")}]`;
+      }
+    }
+  }
+  return null;
+}
+
+// In production, disable compiled-language sandbox when not in hardened container
+const ENABLE_COMPILED_SANDBOX = process.env.ENABLE_COMPILED_SANDBOX === "true" || process.env.NODE_ENV !== "production";
 
 // Language runtime execution parameters
 const RUNTIMES = {
@@ -89,14 +191,30 @@ function runProcess({ command, args, cwd, stdin, timeoutMs }) {
       resolve(result);
     };
 
+    // ── Sandbox isolation: validate cwd is inside restricted temp sandbox ──
+    const expectedSandboxRoot = path.join(os.tmpdir(), "jobly_sandbox");
+    if (cwd && !path.resolve(cwd).startsWith(path.resolve(expectedSandboxRoot))) {
+      logger.warn({ cwd, expectedSandboxRoot }, "Sandbox cwd outside restricted root - execution denied");
+      return finish({ stdout, stderr: "[Security] Invalid working directory", exitCode: 1, durationMs: 0, timedOut: false, error: "Invalid cwd" });
+    }
+    // ── Apply SECCOMP/CGROUPS security profile (logging for audit; actual enforcement via container runtime) ──
+    try {
+      const containerSecurityArgs = generateContainerSecurityArgs({ memoryMb: 256, disableNetworking: NETWORK_ALLOWLIST.length === 0 });
+      logger.debug({ SECCOMP_BPF_PROFILE: SECCOMP_BPF_PROFILE.defaultAction, CGROUPS_V2_CONFIG, containerSecurityArgs, cwd }, "Applying sandbox security profile (SECCOMP/CGROUPS/no-new-privileges/network=none)");
+    } catch (e) {
+      logger.debug({ err: e.message }, "Failed to generate container security args");
+    }
+
     let child;
     try {
       child = spawn(command, args, {
-        cwd,
+        cwd: cwd || expectedSandboxRoot,
+        // Restricted env: only minimal allowlist, no secrets, no host env leakage
         env: {
           NODE_ENV: "production",
           PATH: process.env.PATH,
           PYTHONUNBUFFERED: "1",
+          // Explicitly do NOT pass through process.env secrets like JWT_SECRET, MONGO_URI, etc.
         },
         stdio: ["pipe", "pipe", "pipe"],
       });
@@ -178,6 +296,38 @@ async function executeCodeSandbox({ language, code, stdin = "", timeoutMs }) {
   const runtime = RUNTIMES[language.toLowerCase()];
   if (!runtime) {
     throw new Error(`Unsupported runtime language: ${language}`);
+  }
+  if (runtime.isCompiled && !ENABLE_COMPILED_SANDBOX) {
+    const executionId = crypto.randomUUID();
+    return {
+      executionId,
+      stdout: "",
+      stderr: `[Security] ${language} execution is disabled in this environment. Enable ENABLE_COMPILED_SANDBOX=true with container isolation.`,
+      exitCode: 1,
+      durationMs: 0,
+      timedOut: false,
+      error: "Compiled language disabled",
+      phase: "run",
+      failureKind: "security_violation",
+    };
+  }
+
+  // ── Static analysis pre-check: block host FS, child_process, socket, process.exit, network ──
+  const securityViolation = validateSandboxSecurity(language, code);
+  if (securityViolation) {
+    logger.warn({ language, reason: securityViolation }, "Sandbox static analysis blocked execution");
+    const executionId = crypto.randomUUID();
+    return {
+      executionId,
+      stdout: "",
+      stderr: `[Security] Execution blocked: ${securityViolation}`,
+      exitCode: 1,
+      durationMs: 0,
+      timedOut: false,
+      error: securityViolation,
+      phase: "run",
+      failureKind: "security_violation",
+    };
   }
 
   const effectiveTimeout = timeoutMs || runtime.timeoutMs;
@@ -285,12 +435,6 @@ async function runTestCases({ language, code, testCases = [] }) {
   };
 }
 
-const {
-  SECCOMP_BPF_PROFILE,
-  CGROUPS_V2_CONFIG,
-  generateContainerSecurityArgs,
-} = require("./sandboxSecurityProfile");
-
 module.exports = {
   executeCodeSandbox,
   runTestCases,
@@ -298,4 +442,6 @@ module.exports = {
   SECCOMP_BPF_PROFILE,
   CGROUPS_V2_CONFIG,
   generateContainerSecurityArgs,
+  validateSandboxSecurity,
+  MAX_CODE_BYTES,
 };

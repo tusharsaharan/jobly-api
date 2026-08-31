@@ -41,7 +41,7 @@ class TimeToFillService {
       const similarJobs = await Job.find({
         $or: [
           { title: { $regex: titleRegex } },
-          ...(skills.length > 0 ? [{ skills: { $in: skills.map(s => new RegExp(s, "i")) } }] : [])
+          ...(skills.length > 0 ? [{ skills: { $in: skills.map(s => new RegExp(String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")) } }] : [])
         ]
       }).limit(50).lean();
 

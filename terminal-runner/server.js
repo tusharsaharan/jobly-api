@@ -2,10 +2,22 @@ const http = require("http");
 const crypto = require("crypto");
 const pty = require("node-pty");
 
+const jwt = require("jsonwebtoken");
 const port = Number(process.env.PORT || 4100);
 const terminals = new Map();
 const maxSessions = Number(process.env.MAX_TERMINAL_SESSIONS || 50);
 const maxOutputBytes = 1024 * 1024;
+const JWT_SECRET = process.env.JWT_SECRET || process.env.TERMINAL_JWT_SECRET || "";
+
+function verifyRunnerAuth(req) {
+  if (!JWT_SECRET) return true; // allow when no secret configured (dev), otherwise verify
+  const auth = req.headers.authorization || "";
+  if (!auth.startsWith("Bearer ")) return false;
+  try {
+    jwt.verify(auth.split(" ")[1], JWT_SECRET, { algorithms: ["HS256"] });
+    return true;
+  } catch { return false; }
+}
 const terminalEnvironment = Object.freeze({
   HOME: "/workspace",
   XDG_CONFIG_HOME: "/tmp/jobly-terminal/config",
@@ -57,6 +69,10 @@ const server = http.createServer(async (request, response) => {
     const path = new URL(request.url, `http://${request.headers.host}`).pathname;
     if (request.method === "GET" && path === "/health") {
       return sendJson(response, 200, { ok: true, sessions: terminals.size });
+    }
+    // Require JWT for all non-health endpoints when JWT_SECRET is set
+    if (JWT_SECRET && path.startsWith("/sessions") && !verifyRunnerAuth(request)) {
+      return sendJson(response, 401, { msg: "Unauthorized: invalid terminal runner token" });
     }
 
     if (request.method === "POST" && path === "/sessions") {

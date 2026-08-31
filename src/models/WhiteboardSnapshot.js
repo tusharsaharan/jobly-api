@@ -46,5 +46,6 @@ const whiteboardSnapshotSchema = new mongoose.Schema(
 
 whiteboardSnapshotSchema.index({ session: 1, offsetMs: 1, sequenceNumber: 1 });
 whiteboardSnapshotSchema.index({ session: 1, sequenceNumber: 1 });
+whiteboardSnapshotSchema.index({ createdAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 }); // 30 days TTL
 
 module.exports = mongoose.model("WhiteboardSnapshot", whiteboardSnapshotSchema);

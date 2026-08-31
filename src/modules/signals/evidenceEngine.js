@@ -8,7 +8,8 @@ const logger = require("../../config/logger");
  * Computes a deterministic verification hash for an evidence locator
  */
 function computeVerificationHash(type, offsetMs, locator, summary) {
-  const content = JSON.stringify({ type, offsetMs, locator, summary });
+  const safeOffset = Number.isFinite(Number(offsetMs)) ? Math.max(0, Math.floor(Number(offsetMs))) : 0;
+  const content = JSON.stringify({ type, offsetMs: safeOffset, locator, summary });
   return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
@@ -37,14 +38,15 @@ function createEvidenceReference({
     eventType: locator.eventType || undefined,
   };
 
+  const safeOffset = Number.isFinite(Number(offsetMs)) ? Math.max(0, Math.floor(Number(offsetMs))) : 0;
   const id = `ev-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
-  const verificationHash = computeVerificationHash(type, offsetMs, cleanLocator, summary);
+  const verificationHash = computeVerificationHash(type, safeOffset, cleanLocator, summary);
 
   return {
     id,
     type,
     timelineEventId: String(timelineEventId),
-    offsetMs: Math.max(0, Math.floor(offsetMs)),
+    offsetMs: safeOffset,
     locator: cleanLocator,
     summary: summary.slice(0, 300),
     verificationHash,
@@ -54,9 +56,34 @@ function createEvidenceReference({
 /**
  * 2. Verify that an EvidenceReference corresponds to an existing timeline event
  */
+const SYNTHETIC_FALLBACK_IDS = new Set([
+  "000000000000000000000000",
+  "507f00000000000000000000",
+  "507f1f77bcf86cd799439000",
+]);
+
 async function verifyEvidenceReference(evidenceRef, sessionId = null) {
   if (!evidenceRef || !evidenceRef.timelineEventId) {
     return { valid: false, reason: "Missing timelineEventId in evidence reference" };
+  }
+
+  // B8: Synthetic fallback bypass – synthetic evidence is verifiable without DB lookup
+  const isSynthetic =
+    evidenceRef.isSynthetic === true ||
+    (evidenceRef.id && String(evidenceRef.id).startsWith("ev-fallback")) ||
+    SYNTHETIC_FALLBACK_IDS.has(String(evidenceRef.timelineEventId));
+
+  if (isSynthetic) {
+    const calculatedHash = computeVerificationHash(
+      evidenceRef.type,
+      evidenceRef.offsetMs,
+      evidenceRef.locator,
+      evidenceRef.summary
+    );
+    if (calculatedHash !== evidenceRef.verificationHash) {
+      return { valid: false, reason: "Evidence verification hash mismatch (content may have mutated)" };
+    }
+    return { valid: true, synthetic: true };
   }
 
   try {
@@ -99,7 +126,7 @@ async function resolveEvidenceArtifact(evidenceRef, sessionId) {
         const query = { session: sessionId };
         if (evidenceRef.locator?.file) query["files.path"] = evidenceRef.locator.file;
         const checkpoint = await CodeCheckpoint.findOne(query)
-          .sort({ offsetMs: 1 })
+          .sort({ offsetMs: -1 })
           .where("offsetMs")
           .lte(evidenceRef.offsetMs)
           .lean();
@@ -127,7 +154,7 @@ async function resolveEvidenceArtifact(evidenceRef, sessionId) {
 
       case "WHITEBOARD_SNAPSHOT": {
         const snapshot = await WhiteboardSnapshot.findOne({ session: sessionId })
-          .sort({ offsetMs: 1 })
+          .sort({ offsetMs: -1 })
           .where("offsetMs")
           .lte(evidenceRef.offsetMs)
           .lean();

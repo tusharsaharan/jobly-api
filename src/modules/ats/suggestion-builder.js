@@ -17,7 +17,7 @@ function buildRoleFitSuggestions(categories, gaps, matchedRequirements) {
       action: `If you have worked with ${gap.label}, mention the specific project, tools, and outcomes in your experience bullets.`,
       evidence: [],
       safeToApply: true,
-      dedupeKey: `gap-${gap.requirementKey}`,
+      dedupeKey: `gap-${gap.category}-${gap.requirementKey}`,
     });
   }
 
@@ -49,7 +49,7 @@ function buildRoleFitSuggestions(categories, gaps, matchedRequirements) {
       action: `Add '${gap.label}' to your technical skills or project descriptions if you have relevant experience.`,
       evidence: [],
       safeToApply: true,
-      dedupeKey: `gap-${gap.requirementKey}`,
+      dedupeKey: `gap-${gap.category}-${gap.requirementKey}`,
     });
   }
 

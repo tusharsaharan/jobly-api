@@ -28,8 +28,12 @@ exports.getRecruiterStats = async (req, res) => {
       InterviewSession.countDocuments({ ...userFilter, status: "SCHEDULED" }),
     ]);
 
+    // Fetch session IDs to scope evaluations and prevent cross-tenant leaks
+    const userSessions = await InterviewSession.find(userFilter).select("_id").lean();
+    const sessionIds = userSessions.map((s) => s._id);
+
     // Decision breakdown for evaluated interviews
-    const evaluations = await Evaluation.find().lean();
+    const evaluations = await Evaluation.find({ session: { $in: sessionIds } }).lean();
     const decisionsCount = {
       STRONG_HIRE: 0,
       HIRE: 0,
@@ -124,28 +128,50 @@ exports.getRecruiterLeaderboard = async (req, res) => {
     const Job = require("../models/Job");
     const Application = require("../models/Application");
 
-    const recruiters = await User.find({ role: "recruiter" }).select("name email createdAt").lean();
+    const tenantFilter = req.user?.tenantId ? { tenantId: req.user.tenantId } : {};
+    const recruiters = await User.find({ role: "recruiter", ...tenantFilter }).select("name email createdAt").lean();
+    const recruiterIds = recruiters.map((r) => r._id);
 
-    const leaderboard = await Promise.all(
-      recruiters.map(async (rec) => {
-        const jobs = await Job.find({ recruiter: rec._id }).lean();
-        const filledJobs = jobs.filter((j) => j.closureReason === "filled");
-        const activeJobs = jobs.filter((j) => j.status === "open");
+    // Batch fetch to eliminate N+1 queries
+    const [allJobs, allApps] = await Promise.all([
+      Job.find({ recruiter: { $in: recruiterIds } }).lean(),
+      Application.find({ recruiter: { $in: recruiterIds } }).lean(),
+    ]);
 
-        const applications = await Application.find({ recruiter: rec._id }).lean();
-        const shortlisted = applications.filter((a) => a.status === "shortlisted");
+    // Group by recruiter ID
+    const jobsByRecruiter = {};
+    const appsByRecruiter = {};
+    for (const job of allJobs) {
+      const recId = job.recruiter.toString();
+      if (!jobsByRecruiter[recId]) jobsByRecruiter[recId] = [];
+      jobsByRecruiter[recId].push(job);
+    }
+    for (const app of allApps) {
+      const recId = app.recruiter.toString();
+      if (!appsByRecruiter[recId]) appsByRecruiter[recId] = [];
+      appsByRecruiter[recId].push(app);
+    }
 
-        // Calculate average fill duration
-        let totalFillDays = 0;
-        let countedFills = 0;
-        for (const fj of filledJobs) {
-          if (fj.closedAt) {
-            const days = Math.max(1, Math.round((new Date(fj.closedAt) - new Date(fj.createdAt)) / (1000 * 60 * 60 * 24)));
-            totalFillDays += days;
-            countedFills++;
-          }
+    const leaderboard = recruiters.map((rec) => {
+      const recId = rec._id.toString();
+      const jobs = jobsByRecruiter[recId] || [];
+      const applications = appsByRecruiter[recId] || [];
+
+      const filledJobs = jobs.filter((j) => j.closureReason === "filled");
+      const activeJobs = jobs.filter((j) => j.status === "open");
+      const shortlisted = applications.filter((a) => a.status === "shortlisted");
+
+      // Calculate average fill duration
+      let totalFillDays = 0;
+      let countedFills = 0;
+      for (const fj of filledJobs) {
+        if (fj.closedAt) {
+          const days = Math.max(1, Math.round((new Date(fj.closedAt) - new Date(fj.createdAt)) / (1000 * 60 * 60 * 24)));
+          totalFillDays += days;
+          countedFills++;
         }
-        const avgTimeToFill = countedFills > 0 ? Math.round(totalFillDays / countedFills) : 24;
+      }
+      const avgTimeToFill = countedFills > 0 ? Math.round(totalFillDays / countedFills) : 24;
 
         // Calculate average candidate ATS score
         const atsScores = applications.filter((a) => typeof a.atsScore === "number").map((a) => a.atsScore);
@@ -171,8 +197,7 @@ exports.getRecruiterLeaderboard = async (req, res) => {
           badges,
           score: (filledJobs.length * 15) + (shortlisted.length * 5) + (jobs.length * 2) + Math.max(0, 100 - avgTimeToFill)
         };
-      })
-    );
+      });
 
     leaderboard.sort((a, b) => b.score - a.score);
 

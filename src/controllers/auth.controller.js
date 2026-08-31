@@ -7,14 +7,14 @@ const logger = require("../config/logger");
 function generateTokens(userId, role) {
   const token = jwt.sign(
     { id: userId, role },
-    config.JWT_SECRET || process.env.JWT_SECRET || "development_secret_key_12345678",
-    { expiresIn: config.JWT_EXPIRES_IN || "1h" }
+    config.JWT_SECRET,
+    { expiresIn: config.JWT_EXPIRES_IN }
   );
 
   const refreshToken = jwt.sign(
     { id: userId },
-    config.JWT_REFRESH_SECRET || "refresh_token_super_secret_key_jobly_2026",
-    { expiresIn: config.JWT_REFRESH_EXPIRES_IN || "7d" }
+    config.JWT_REFRESH_SECRET,
+    { expiresIn: config.JWT_REFRESH_EXPIRES_IN }
   );
 
   return { token, refreshToken };
@@ -22,10 +22,14 @@ function generateTokens(userId, role) {
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, tenantId } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ msg: "Please provide name, email, and password" });
+    if (!name || typeof name !== "string" || !email || typeof email !== "string" || !password || typeof password !== "string") {
+      return res.status(400).json({ msg: "Please provide valid name, email, and password" });
+    }
+    // Enforce minimal password strength
+    if (password.length < 8) {
+      return res.status(400).json({ msg: "Password must be at least 8 characters" });
     }
 
     if (role && !["seeker", "recruiter"].includes(role)) {
@@ -33,6 +37,9 @@ exports.register = async (req, res) => {
     }
 
     const emailLower = email.toLowerCase().trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLower)) {
+      return res.status(400).json({ msg: "Invalid email format" });
+    }
     const exists = await User.findOne({ email: emailLower });
     if (exists) return res.status(400).json({ msg: "User exists" });
 
@@ -42,6 +49,7 @@ exports.register = async (req, res) => {
       email: emailLower,
       password: hashed,
       role: role || "seeker",
+      tenantId: tenantId || "default",
     });
 
     const { token, refreshToken } = generateTokens(user._id, user.role);
@@ -61,8 +69,8 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ msg: "Please provide email and password" });
+    if (!email || typeof email !== "string" || !password || typeof password !== "string") {
+      return res.status(400).json({ msg: "Please provide valid email and password" });
     }
 
     const emailLower = email.toLowerCase().trim();
@@ -88,13 +96,13 @@ exports.login = async (req, res) => {
 exports.refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.body;
-    if (!refreshToken) {
-      return res.status(400).json({ msg: "Refresh token required" });
+    if (!refreshToken || typeof refreshToken !== "string") {
+      return res.status(400).json({ msg: "Valid refresh token required" });
     }
 
     const decoded = jwt.verify(
       refreshToken,
-      config.JWT_REFRESH_SECRET || "refresh_token_super_secret_key_jobly_2026"
+      config.JWT_REFRESH_SECRET
     );
 
     const user = await User.findById(decoded.id).select("-password -resumeText").lean();

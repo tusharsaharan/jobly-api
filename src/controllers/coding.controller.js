@@ -1,14 +1,20 @@
 const logger = require("../config/logger");
 const InterviewSession = require("../models/InterviewSession");
 const TimelineEvent = require("../models/TimelineEvent");
+const path = require("path");
 const { getOrCreateRoomDoc, persistRoomDocNow } = require("../infrastructure/realtime/yjsCoordinator");
 
 /**
  * Verify caller is an authorized participant of the session
  */
 async function authorizeParticipant(sessionIdOrRoomKey, user) {
+  // Enforce tenant isolation when user has tenantId
+  const tenantFilter = user?.tenantId ? { tenantId: user.tenantId } : {};
   const session = await InterviewSession.findOne({
-    $or: [{ _id: sessionIdOrRoomKey.match(/^[0-9a-fA-F]{24}$/) ? sessionIdOrRoomKey : null }, { roomKey: sessionIdOrRoomKey }],
+    $and: [
+      { $or: [{ _id: sessionIdOrRoomKey.match(/^[0-9a-fA-F]{24}$/) ? sessionIdOrRoomKey : null }, { roomKey: sessionIdOrRoomKey }] },
+      tenantFilter,
+    ],
   }).populate("seeker recruiter additionalInterviewers");
 
   if (!session) {
@@ -40,6 +46,54 @@ function getSessionOffsetMs(session) {
   return session.actualStart ? Math.max(0, Date.now() - new Date(session.actualStart).getTime()) : 0;
 }
 
+// Helper to decode and normalize path, blocking encoded traversal (%2e%2e%2f etc.)
+function decodeAndValidatePath(rawPath) {
+  if (typeof rawPath !== "string") return { error: "Invalid file path" };
+  let decoded = rawPath;
+  try {
+    decoded = decodeURIComponent(rawPath);
+  } catch (e) {
+    // If decoding fails, treat as invalid
+    return { error: "Invalid encoded path" };
+  }
+  // Check decoded for traversal and null bytes before normalize
+  if (decoded.includes("..") || decoded.includes("\0") || decoded.includes("\\")) {
+    return { error: "Invalid file path (directory traversal not allowed)." };
+  }
+  // Also check raw encoded forms that decode to traversal (e.g., %2e%2e)
+  // decoded already covers it, but double-decode to catch double encoding
+  try {
+    const doubleDecoded = decodeURIComponent(decoded);
+    if (doubleDecoded !== decoded && (doubleDecoded.includes("..") || doubleDecoded.includes("\0"))) {
+      return { error: "Invalid file path (directory traversal not allowed)." };
+    }
+  } catch (_) {}
+  const normalized = path.posix.normalize(decoded.startsWith("/") ? decoded : `/${decoded}`);
+  if (normalized.includes("..") || !normalized.startsWith("/") || normalized.includes("\0")) {
+    return { error: "Invalid file path (directory traversal not allowed)." };
+  }
+  return { cleanPath: normalized, decoded };
+}
+
+// Per-room mutex to prevent concurrent file creation race where two users create same path simultaneously (both see has=false and overwrite)
+// Brutal test: simultaneous file creation at same path must give 201 + 409, not 201 + 201
+const fileCreationLocks = new Map();
+async function withFileLock(roomKey, fn) {
+  const previous = fileCreationLocks.get(roomKey) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => (release = resolve));
+  fileCreationLocks.set(roomKey, current);
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    release();
+    setTimeout(() => {
+      if (fileCreationLocks.get(roomKey) === current) fileCreationLocks.delete(roomKey);
+    }, 5000).unref?.();
+  }
+}
+
 /**
  * POST /api/coding/:sessionId/files
  * Create a new file in the collaborative Yjs workspace
@@ -58,46 +112,57 @@ exports.createFile = async (req, res) => {
     const { doc } = entry;
     const filesystem = doc.getMap("filesystem");
 
-    // Standardize path representation
-    const cleanPath = filePath.startsWith("/") ? filePath : `/${filePath}`;
-
-    if (filesystem.has(cleanPath)) {
-      return res.status(409).json({ msg: "File or directory already exists at this path." });
+    // Path traversal encoded fix: decodeURIComponent before checking .. and normalize
+    const pathResult = decodeAndValidatePath(filePath);
+    if (pathResult.error) {
+      return res.status(400).json({ msg: pathResult.error });
+    }
+    const cleanPath = pathResult.cleanPath;
+    // Enforce Y.Text size limit for initialContent
+    if (initialContent && Buffer.byteLength(String(initialContent), "utf8") > 100000) {
+      return res.status(413).json({ msg: "File content exceeds 100KB limit" });
     }
 
-    // Mutate CRDT structure inside a single transaction
-    doc.transact(() => {
-      filesystem.set(cleanPath, {
-        type: "file",
-        name,
-        path: cleanPath,
-        language: language || "python",
-        createdAt: Date.now(),
+    // Brutal fix: serialize file creation per room to prevent race where both users see has=false and duplicate
+    return await withFileLock(session.roomKey, async () => {
+      if (filesystem.has(cleanPath)) {
+        return res.status(409).json({ msg: "File or directory already exists at this path." });
+      }
+
+      // Mutate CRDT structure inside a single transaction
+      doc.transact(() => {
+        filesystem.set(cleanPath, {
+          type: "file",
+          name,
+          path: cleanPath,
+          language: language || "python",
+          createdAt: Date.now(),
+        });
+
+        const ytext = doc.getText(cleanPath);
+        ytext.delete(0, ytext.length);
+        if (initialContent) {
+          ytext.insert(0, initialContent);
+        }
       });
 
-      const ytext = doc.getText(cleanPath);
-      ytext.delete(0, ytext.length);
-      if (initialContent) {
-        ytext.insert(0, initialContent);
-      }
-    });
+      // Record timeline event
+      await TimelineEvent.create({
+        session: session._id,
+        pipeline: "CODING",
+        eventType: "file.created",
+        offsetMs: getSessionOffsetMs(session),
+        participant: req.user._id,
+        participantRole: req.user.role || "seeker",
+        payload: { file: cleanPath, language: language || "python" },
+      });
 
-    // Record timeline event
-    await TimelineEvent.create({
-      session: session._id,
-      pipeline: "CODING",
-      eventType: "file.created",
-      offsetMs: getSessionOffsetMs(session),
-      participant: req.user._id,
-      participantRole: req.user.role || "seeker",
-      payload: { file: cleanPath, language: language || "python" },
-    });
+      await persistRoomDocNow(session.roomKey, doc, "yjsState");
 
-    await persistRoomDocNow(session.roomKey, doc, "yjsState");
-
-    return res.status(201).json({
-      msg: "File created successfully",
-      file: { path: cleanPath, name, language: language || "python" },
+      return res.status(201).json({
+        msg: "File created successfully",
+        file: { path: cleanPath, name, language: language || "python" },
+      });
     });
   } catch (err) {
     logger.error({ err: err.message }, "Error creating collaborative file");
@@ -122,7 +187,11 @@ exports.deleteFile = async (req, res) => {
     const entry = await getOrCreateRoomDoc(session.roomKey);
     const { doc } = entry;
     const filesystem = doc.getMap("filesystem");
-    const cleanPath = filePath.startsWith("/") ? filePath : `/${filePath}`;
+    const delPathResult = decodeAndValidatePath(filePath);
+    if (delPathResult.error) {
+      return res.status(400).json({ msg: delPathResult.error });
+    }
+    const cleanPath = delPathResult.cleanPath;
 
     if (!filesystem.has(cleanPath)) {
       return res.status(404).json({ msg: "File not found at specified path." });
@@ -171,12 +240,19 @@ exports.renameFile = async (req, res) => {
     const { doc } = entry;
     const filesystem = doc.getMap("filesystem");
 
-    const cleanOld = oldPath.startsWith("/") ? oldPath : `/${oldPath}`;
-    const cleanNew = newPath.startsWith("/") ? newPath : `/${newPath}`;
+    const oldRes = decodeAndValidatePath(oldPath);
+    const newRes = decodeAndValidatePath(newPath);
+    if (oldRes.error) return res.status(400).json({ msg: oldRes.error });
+    if (newRes.error) return res.status(400).json({ msg: newRes.error });
+    const cleanOld = oldRes.cleanPath;
+    const cleanNew = newRes.cleanPath;
 
     const existing = filesystem.get(cleanOld);
     if (!existing) {
       return res.status(404).json({ msg: "Source file not found." });
+    }
+    if (filesystem.has(cleanNew)) {
+      return res.status(409).json({ msg: "Destination already exists." });
     }
 
     doc.transact(() => {
@@ -231,7 +307,11 @@ exports.createDirectory = async (req, res) => {
     const entry = await getOrCreateRoomDoc(session.roomKey);
     const { doc } = entry;
     const filesystem = doc.getMap("filesystem");
-    const cleanPath = dirPath.startsWith("/") ? dirPath : `/${dirPath}`;
+    const dirRes = decodeAndValidatePath(dirPath);
+    if (dirRes.error) {
+      return res.status(400).json({ msg: dirRes.error });
+    }
+    const cleanPath = dirRes.cleanPath;
 
     doc.transact(() => {
       filesystem.set(cleanPath, {

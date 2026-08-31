@@ -4,7 +4,10 @@ const jobSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true, minlength: 2, maxlength: 160 },
   company: { type: String, trim: true, maxlength: 160, default: "" },
   description: { type: String, required: true, trim: true, minlength: 20, maxlength: 8000 },
-  skills: [{ type: String, trim: true, maxlength: 80 }],
+  skills: {
+    type: [{ type: String, trim: true, maxlength: 80 }],
+    validate: [array => array.length <= 30, 'Exceeds maximum allowed skills (30)']
+  },
   location: { type: String, trim: true, maxlength: 160, default: "" },
   type: { type: String, enum: ["", "Full-time", "Part-time", "Contract", "Internship"], default: "" },
   atsRequirements: {
@@ -38,13 +41,16 @@ const jobSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true,
-    index: true,
   },
 }, { timestamps: true });
 
 // Performance compound indexes
 jobSchema.index({ recruiter: 1, createdAt: -1 });
 jobSchema.index({ createdAt: -1 });
-jobSchema.index({ title: "text", description: "text", skills: "text" });
+jobSchema.index({ skills: 1, createdAt: -1 });
+jobSchema.index({ recruiter: 1, skills: 1 });
+jobSchema.index({ skills: 1 });
+jobSchema.index({ location: 1, type: 1, skills: 1, createdAt: -1 });
+// Native text index removed in favor of external Atlas Search
 
 module.exports = mongoose.model("Job", jobSchema);

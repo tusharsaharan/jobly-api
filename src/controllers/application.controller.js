@@ -3,6 +3,7 @@ const Application = require("../models/Application");
 const Job = require("../models/Job");
 const ai = require("../services/ai.service");
 const { meetsAtsRequirements } = require("../utils/jobLogic");
+const logger = require("../config/logger");
 
 exports.applyToJob = async (req, res) => {
   try {

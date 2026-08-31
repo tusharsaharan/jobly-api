@@ -248,6 +248,13 @@ describe("Feature 7: Evidence Engine & Evaluation System", () => {
           category: "System Design",
           score: 3,
           notes: "State scaling assumptions earlier.",
+          evidenceRefs: [
+            {
+              refType: "TIMELINE_EVENT",
+              timelineEventId: timelineEv._id,
+              quote: "Candidate design discussion",
+            },
+          ],
         },
       ],
     });

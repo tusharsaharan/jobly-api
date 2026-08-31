@@ -33,7 +33,7 @@ exports.getApplicationAnalysis = async (req, res) => {
     }
 
     // Generate V2 analysis on the fly if not already persisted
-    const seeker = await User.findById(application.seeker._id || application.seeker);
+    const seeker = await User.findById(application.seeker._id || application.seeker).select("-password");
     const job = application.job;
 
     const resumeProfile = seeker.resumeProfile || {
@@ -103,17 +103,29 @@ exports.getApplicationAnalysis = async (req, res) => {
       resumeHash: resumeProfile.source?.sha256 || "0".repeat(64),
     });
 
-    const savedAnalysis = await AtsAnalysis.create({
-      ...analysis,
-      userId: seeker._id,
-      jobId: job._id,
-      applicationId: application._id,
-    });
+    const dbSession = await AtsAnalysis.db.startSession();
+    dbSession.startTransaction();
+    let savedAnalysis;
+    try {
+      [savedAnalysis] = await AtsAnalysis.create([{
+        ...analysis,
+        userId: seeker._id,
+        jobId: job._id,
+        applicationId: application._id,
+      }], { session: dbSession });
 
-    application.atsScore = analysis.overallScore;
-    application.latestAtsAnalysis = savedAnalysis._id;
-    application.atsVersion = "v2";
-    await application.save();
+      application.atsScore = analysis.overallScore;
+      application.latestAtsAnalysis = savedAnalysis._id;
+      application.atsVersion = "v2";
+      await application.save({ session: dbSession });
+
+      await dbSession.commitTransaction();
+    } catch (txnErr) {
+      await dbSession.abortTransaction();
+      throw txnErr;
+    } finally {
+      dbSession.endSession();
+    }
 
     return res.json({ analysis: savedAnalysis });
   } catch (err) {
@@ -133,7 +145,7 @@ exports.calculateJobFit = async (req, res) => {
       return res.status(404).json({ msg: "Job not found" });
     }
 
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user._id).select("-password");
     if (!user) {
       return res.status(404).json({ msg: "User not found" });
     }

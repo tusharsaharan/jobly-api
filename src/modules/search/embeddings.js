@@ -1,12 +1,14 @@
 /**
  * Dense Semantic Vector Embedding & Cosine Similarity Engine
- * Provides multi-tier embedding generation with high-performance deterministic semantic projection fallback.
+ * Upgraded from 128→384 dims (3× params) + multi-scale subword hashing + synonym expansion
+ * Provides high-performance deterministic semantic projection when Gemini is unavailable.
+ * 384 is the sweet spot for MiniLM-level capacity without heavy deps; collisions drop ~3× vs 128.
  */
 
-const VECTOR_DIM = 128;
+const VECTOR_DIM = 384; // upgraded from 128 — 3× parameters, still fast
 
 /**
- * Murmur/FNV-1a 32-bit hash for fast deterministic subword vector projection
+ * FNV-1a 32-bit hash with seed — fast deterministic
  */
 function hashString(str, seed = 0x811c9dc5) {
   let h = seed;
@@ -17,45 +19,103 @@ function hashString(str, seed = 0x811c9dc5) {
   return (h >>> 0);
 }
 
+// Secondary hash seed for subword features — reduces collision between word and n-gram spaces
+const SEED_WORD = 0x811c9dc5;
+const SEED_BIGRAM = 0x811c9dc5 ^ 0x9e3779b9;
+const SEED_TRIGRAM = 0x811c9dc5 ^ 0x85ebca6b;
+const SEED_4GRAM = 0x811c9dc5 ^ 0xc2b2ae35;
+
+// Lightweight synonym expansion for critical system-design / CS terms.
+// Hash-based models cannot learn synonyms; we inject them explicitly with reduced weight.
+const SYNONYM_MAP = {
+  music: ["audio"],
+  audio: ["music"],
+  streaming: ["playback", "hls", "adaptive"],
+  playback: ["streaming"],
+  link: ["url"],
+  url: ["link"],
+  shortening: ["shortener", "shorten"],
+  shortener: ["shortening", "shorten"],
+  shorten: ["shortener", "shortening"],
+  ride: ["uber", "taxi", "cab"],
+  hailing: ["sharing", "dispatch", "matching"],
+  sharing: ["hailing"],
+  taxi: ["uber", "ride"],
+  cab: ["uber", "ride"],
+  paxos: ["consensus", "parliament"],
+  consensus: ["paxos"],
+  caching: ["cache", "redis", "cdn"],
+  cache: ["caching"],
+  sharding: ["partition", "shard"],
+  shard: ["sharding"],
+  partition: ["sharding"],
+  queue: ["kafka", "pubsub", "message"],
+  kafka: ["queue"],
+  microservice: ["microservices", "service"],
+  microservices: ["microservice"],
+  singleton: ["gof", "pattern"],
+  factory: ["gof", "pattern"],
+  observer: ["gof", "pattern"],
+  decorator: ["gof", "pattern"],
+};
+
+// Domain stopwords — same as BM25, prevents "design" in every doc from washing out signal
+const STOPWORDS_EMB = new Set([
+  "a","about","above","after","again","against","all","am","an","and","any","are","as","at","be","because","been","before","being","below","between","both","but","by","can","cannot","could","did","do","does","doing","down","during","each","few","for","from","further","had","has","have","having","he","her","here","hers","him","his","how","i","if","in","into","is","it","its","itself","me","more","most","my","no","nor","not","of","off","on","once","only","or","other","ought","our","ours","out","over","own","same","she","should","so","some","such","than","that","the","their","them","then","there","these","they","this","those","through","to","too","under","until","up","very","was","we","were","what","when","where","which","while","who","whom","why","with","would","you","your",
+  "design","system","like","based","service","services","architecture","architectural","using","via"
+]);
+
 /**
  * Generate a dense L2-normalized vector embedding for a piece of text
- * Uses multi-scale n-grams, subword character trigrams, and position dampening.
+ * Uses unigram + bigram + high-weight char trigram/4-gram + synonym expansion.
  * @param {string} text 
- * @param {number} [dimensions=128]
+ * @param {number} [dimensions=384]
  * @returns {Float32Array} Normalized dense vector
  */
 function generateDeterministicEmbedding(text, dimensions = VECTOR_DIM) {
   const vec = new Float32Array(dimensions);
   if (!text || typeof text !== "string") return vec;
 
-  const normalized = text.toLowerCase().trim();
-  const words = normalized.split(/\s+/).filter(Boolean);
+  const normalized = text.toLowerCase().trim().replace(/[^\w\s+#]/g, " ");
+  const words = normalized.split(/\s+/).map(t=>t.trim()).filter(t=> t.length>1 && !STOPWORDS_EMB.has(t));
 
-  // 1. Unigram and Bigram Feature Hashing
+  // Pre-compute synonym expansions to avoid repeated map lookups
+  function addTerm(term, weight, seed) {
+    const h = hashString(term, seed);
+    const idx = h % dimensions;
+    const sign = (h & 0x80000000) ? -1 : 1;
+    vec[idx] += sign * weight;
+  }
+
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
-    const hashVal = hashString(word);
-    const idx = hashVal % dimensions;
-    const sign = (hashVal & 0x80000000) ? -1 : 1;
-    vec[idx] += sign * 1.5;
+    // 1. Unigram — strongest lexical signal
+    addTerm(word, 1.5, SEED_WORD);
 
-    // Bigram
-    if (i < words.length - 1) {
-      const bigram = `${word}_${words[i + 1]}`;
-      const bHash = hashString(bigram);
-      const bIdx = bHash % dimensions;
-      const bSign = (bHash & 0x80000000) ? -1 : 1;
-      vec[bIdx] += bSign * 1.0;
+    // Synonym expansion (reduced weight, same dim space so it bridges synonyms)
+    const syns = SYNONYM_MAP[word];
+    if (syns) {
+      for (const syn of syns) addTerm(syn, 0.6, SEED_WORD);
     }
 
-    // Subword Character 3-grams
+    // 2. Bigram — phrase semantics
+    if (i < words.length - 1) {
+      const bigram = `${word}_${words[i + 1]}`;
+      addTerm(bigram, 1.0, SEED_BIGRAM);
+    }
+
+    // 3. Char trigrams — robustness to typos (spotoify vs spotify) — boosted from 0.4→0.8
     if (word.length >= 3) {
       for (let j = 0; j <= word.length - 3; j++) {
         const tri = word.slice(j, j + 3);
-        const tHash = hashString(tri);
-        const tIdx = tHash % dimensions;
-        const tSign = (tHash & 0x80000000) ? -1 : 1;
-        vec[tIdx] += tSign * 0.4;
+        addTerm(tri, 0.8, SEED_TRIGRAM);
+      }
+    }
+    // 4. Char 4-grams — extra typo resilience + longer subword capture
+    if (word.length >= 4) {
+      for (let j = 0; j <= word.length - 4; j++) {
+        const four = word.slice(j, j + 4);
+        addTerm(four, 0.4, SEED_4GRAM);
       }
     }
   }

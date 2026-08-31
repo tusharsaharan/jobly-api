@@ -13,31 +13,45 @@ class MockRuleBasedProvider extends BaseAIProvider {
   async generateJSON(prompt, options = {}) {
     const text = String(prompt || "");
 
+    // Check if this is a conversation summary request
+    if (text.includes("Summarize the following private message thread")) {
+      return JSON.stringify({
+        summary: "This thread covered introductions, logistics, and next steps for the role.",
+        highlights: [
+          "Parties introduced themselves",
+          "Availability and scheduling discussed",
+          "Next steps pending review",
+        ],
+      });
+    }
+
     // Check if this is a candidate questions request
-    if (text.toLowerCase().includes("questions") || text.toLowerCase().includes("faq")) {
+    if (text.includes("identify 4-5 high-signal questions")) {
+      const titleMatch = text.match(/Title:\s*(.+)/i);
+      const title = titleMatch ? titleMatch[1].trim() : "this role";
       return JSON.stringify({
         questions: [
           {
             id: "q-1",
-            question: "What is the day-to-day team structure and reporting line?",
-            defaultAnswer: "You will collaborate with 4 senior engineers, a product manager, and an engineering lead.",
+            question: `What is the day-to-day team structure for the ${title} position?`,
+            defaultAnswer: `As a ${title}, you will collaborate closely with cross-functional team members.`,
             category: "team_structure",
           },
           {
             id: "q-2",
-            question: "What are the core technologies and development workflows used daily?",
-            defaultAnswer: "Our stack runs React, TypeScript, and Node.js with automated CI/CD and pull request reviews.",
+            question: "What are the core technologies and workflows used daily?",
+            defaultAnswer: "Our stack relies on modern tools with automated CI/CD and pull request reviews.",
             category: "tech_stack",
           },
           {
             id: "q-3",
-            question: "What does the growth path and career progression look like for this position?",
-            defaultAnswer: "We offer structured bi-annual performance cycles with clear milestones for staff-level progression.",
+            question: `What does the growth path look like for a ${title}?`,
+            defaultAnswer: "We offer structured bi-annual performance cycles with clear milestones.",
             category: "growth_path",
           },
           {
             id: "q-4",
-            question: "What are the remote work expectations and core collaboration hours?",
+            question: "What are the remote work expectations?",
             defaultAnswer: "We operate fully remote with 4 overlapping collaboration hours per day.",
             category: "logistics",
           },
@@ -45,8 +59,25 @@ class MockRuleBasedProvider extends BaseAIProvider {
       });
     }
 
-    // Check if this is a resume parse request or job generation request
-    if (text.toLowerCase().includes("resume") || text.toLowerCase().includes("candidate")) {
+    // Check if this is a DEI rewrite request
+    if (text.includes("Diversity, Equity, and Inclusion (DEI) talent acquisition consultant")) {
+      const descMatch = text.match(/Original Job Description:\n"""\n([\s\S]*?)\n"""/i);
+      const desc = descMatch ? descMatch[1].trim() : text;
+      return JSON.stringify({
+        rewrittenDescription: desc + "\n\nWe are an equal opportunity employer and welcome applications from all backgrounds.",
+        improvements: [
+          {
+            originalPhrase: "various",
+            replacementPhrase: "inclusive terms",
+            reason: "Mock provider made this description more inclusive."
+          }
+        ],
+        summary: "DEI rewrite applied via fallback parser."
+      });
+    }
+
+    // Check if this is a resume parse request
+    if (text.includes("You are an expert AI Resume Parser")) {
       const skillsList = [
         "javascript", "react", "node", "nodejs", "express", "mongodb", "sql",
         "python", "java", "c++", "html", "css", "git", "typescript",
@@ -83,7 +114,7 @@ class MockRuleBasedProvider extends BaseAIProvider {
       company: "",
       location: "",
       type: "Full-time",
-      description: text.length >= 20 ? text : "Engineering role with required qualifications.",
+      description: text.length >= 20 ? text : `Engineering role with required qualifications for: ${text}`,
       skills: normalizeSkills(mentionedSkills),
       atsRequirements: {
         minCgpa: 0,

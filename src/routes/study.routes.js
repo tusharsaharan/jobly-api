@@ -13,6 +13,9 @@ router.get("/search", authMiddleware.optional, studyController.searchResources);
 router.post("/chat", authMiddleware.optional, studyController.ragChatbot);
 router.post("/tutor", authMiddleware.optional, studyController.generalTutor);
 router.get("/codeforces/:handle", authMiddleware.optional, studyController.getCodeforcesStats);
+router.get("/codeforces/:handle/rating-history", authMiddleware.optional, studyController.getCodeforcesRatingHistory);
+router.get("/codeforces/:handle/submissions", authMiddleware.optional, studyController.getCodeforcesSubmissions);
+router.get("/codeforces/:handle/recommendations", authMiddleware.optional, studyController.getCodeforcesProblemRecommendations);
 router.get("/repo", authMiddleware.optional, studyController.getRepoData);
 
 // Authenticated Candidate Endpoints

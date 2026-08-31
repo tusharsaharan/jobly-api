@@ -9,11 +9,56 @@ const User = require("../../models/User");
 let io = null;
 const focusEventDedup = new Map();
 const FOCUS_EVENT_TYPES = new Set(["tab_hidden", "window_blur", "fullscreen_exit", "focus_restored"]);
+// Plan Phase 6: rate limiting & debouncing for signal emissions
+const signalRateMap = new Map(); // socketId -> { count, windowStart }
+const copilotDebounceMap = new Map(); // userId:roomKey -> timeout handle
+const copilotRateMap = new Map(); // userId -> { count, windowStart }
+const SIGNAL_RATE_LIMIT = 10; // max 10 signals per second
+const SIGNAL_WINDOW_MS = 1000;
+const COPILOT_RATE_LIMIT = 5; // max 5 copilot requests per minute
+const COPILOT_WINDOW_MS = 60 * 1000;
+const COPILOT_DEBOUNCE_MS = 800;
+// B12: per-session signal limit 100 signals/session (total per session)
+const sessionSignalMap = new Map(); // sessionKey (roomKey or sessionId) -> count
+const SESSION_SIGNAL_LIMIT = 100;
+
+function isSignalRateLimited(socketId) {
+  const now = Date.now();
+  const entry = signalRateMap.get(socketId);
+  if (!entry || now - entry.windowStart > SIGNAL_WINDOW_MS) {
+    signalRateMap.set(socketId, { count: 1, windowStart: now });
+    return false;
+  }
+  if (entry.count >= SIGNAL_RATE_LIMIT) return true;
+  entry.count += 1;
+  return false;
+}
+
+function isSessionSignalRateLimited(sessionKey) {
+  if (!sessionKey) return false;
+  const key = String(sessionKey);
+  const count = sessionSignalMap.get(key) || 0;
+  if (count >= SESSION_SIGNAL_LIMIT) return true;
+  sessionSignalMap.set(key, count + 1);
+  return false;
+}
+function isCopilotRateLimited(userId) {
+  const now = Date.now();
+  const entry = copilotRateMap.get(userId);
+  if (!entry || now - entry.windowStart > COPILOT_WINDOW_MS) {
+    copilotRateMap.set(userId, { count: 1, windowStart: now });
+    return false;
+  }
+  if (entry.count >= COPILOT_RATE_LIMIT) return true;
+  entry.count += 1;
+  return false;
+}
 
 function setupSocketIO(server) {
+  const allowedOrigin = process.env.CLIENT_ORIGIN;
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_ORIGIN || "*",
+      origin: allowedOrigin || "http://localhost:3000",
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -41,7 +86,11 @@ function setupSocketIO(server) {
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || "development_secret_key_12345678");
+      const config = require("../../config/env");
+      const secret = config.JWT_SECRET || process.env.JWT_SECRET;
+      if (!secret) return next(new Error("Server misconfigured"));
+      if (process.env.NODE_ENV !== "test" && secret.length < 32) return next(new Error("Server misconfigured"));
+      const decoded = jwt.verify(token, secret);
       const user = await User.findById(decoded.id).select("-password -resumeText").lean();
       if (!user) {
         return next(new Error("User account not found"));
@@ -159,97 +208,43 @@ function setupSocketIO(server) {
       }
     });
 
-    // Proctor event relay: seeker emits focus/fullscreen changes, forwarded to interview team
-    socket.on("proctor_event", ({ roomKey, eventType, timestamp }) => {
+    // Proctor event relay: ONLY seeker emits, forwarded to interview team (prevent recruiter impersonating candidate)
+    socket.on("proctor_event", async ({ roomKey, eventType, timestamp }) => {
       if (!roomKey || !eventType) return;
+      let session = null;
+      try {
+        const InterviewSession = require("../../models/InterviewSession");
+        session = await InterviewSession.findOne({ roomKey }).select("seeker recruiter additionalInterviewers status actualStart").lean();
+        if (!session) return;
+        if (String(session.seeker) !== userId) return; // only candidate may emit proctor signals
+      } catch {}
       const roomChannel = `interview:${roomKey}`;
-      socket.to(roomChannel).emit("proctor_event_received", {
+      // Persist as timeline event for replay and audit
+      try {
+        const TimelineEvent = require("../../models/TimelineEvent");
+        const offsetMs = session?.actualStart ? Math.max(0, Date.now() - new Date(session.actualStart).getTime()) : 0;
+        // Only persist meaningful proctor events (not every fullscreen_enter)
+        if (["fullscreen_exited", "tab_hidden", "window_blur", "fullscreen_entered"].includes(eventType)) {
+          await TimelineEvent.create({
+            session: session._id,
+            pipeline: "INTEGRITY",
+            eventType: `focus.${eventType}`,
+            offsetMs,
+            participant: socket.user._id,
+            participantRole: "seeker",
+            payload: { text: eventType === "fullscreen_exited" ? "Candidate exited fullscreen" : eventType === "tab_hidden" ? "Candidate switched tabs" : eventType === "window_blur" ? "Candidate window lost focus" : `Candidate ${eventType}`, isAnomalous: eventType !== "fullscreen_entered" },
+          });
+        }
+      } catch (err) {
+        logger.debug({ err: err.message }, "Failed to persist proctor timeline event");
+      }
+      // Emit only to interviewers sub-room (more targeted, avoids duplicate for interviewers in both rooms)
+      io.to(`${roomChannel}:interviewers`).emit("proctor_event_received", {
         eventType,
         timestamp: timestamp || Date.now(),
         senderId: userId,
       });
-    });
-
-    // ==========================================
-    // Real-Time Competition Room Handlers (Quiz / CP)
-    // ==========================================
-    socket.on("join_competition", async ({ roomKey }) => {
-      if (!roomKey) return;
-      const compChannel = `competition:${roomKey}`;
-      try {
-        const CompetitionRoom = require("../../models/CompetitionRoom");
-        const room = await CompetitionRoom.findOne({ roomKey });
-        if (!room) {
-          socket.emit("competition_error", { message: "Competition room not found." });
-          return;
-        }
-
-        // Add user as participant if not already there
-        const exists = room.participants.some(p => String(p.user) === userId);
-        if (!exists && String(room.host) !== userId) {
-          room.participants.push({ user: socket.user._id, name: socket.user.name, score: 0 });
-          await room.save();
-        }
-
-        socket.join(compChannel);
-        logger.info({ userId, roomKey }, "Joined competition room");
-
-        // Broadcast updated leaderboard
-        io.to(compChannel).emit("competition_leaderboard", {
-          participants: room.participants,
-        });
-      } catch (err) {
-        logger.error({ err: err.message }, "Error joining competition");
-      }
-    });
-
-    socket.on("start_competition", async ({ roomKey }) => {
-      try {
-        const CompetitionRoom = require("../../models/CompetitionRoom");
-        const room = await CompetitionRoom.findOne({ roomKey });
-        if (!room || String(room.host) !== userId) return;
-
-        room.status = "LIVE";
-        room.actualStart = new Date();
-        await room.save();
-
-        io.to(`competition:${roomKey}`).emit("competition_started", { actualStart: room.actualStart });
-      } catch (err) {
-        logger.error({ err: err.message }, "Error starting competition");
-      }
-    });
-
-    socket.on("competition_submission", async ({ roomKey, problemIndex, answer }) => {
-      try {
-        const CompetitionRoom = require("../../models/CompetitionRoom");
-        const room = await CompetitionRoom.findOne({ roomKey });
-        if (!room || room.status !== "LIVE") return;
-
-        const problem = room.problems[problemIndex];
-        const participant = room.participants.find(p => String(p.user) === userId);
-        if (!problem || !participant) return;
-
-        let points = 0;
-        if (room.type === "QUIZ") {
-          if (answer === problem.correctAnswer) points = 10;
-        } else if (room.type === "CP") {
-          // Mock CP evaluation for now
-          points = 100; 
-        }
-
-        if (points > 0) {
-          participant.score += points;
-          await room.save();
-          io.to(`competition:${roomKey}`).emit("competition_leaderboard", {
-            participants: room.participants,
-          });
-        }
-      } catch (err) {
-        logger.error({ err: err.message }, "Error processing submission");
-      }
-    });
-
-
+});
 
     socket.on("leave_interview", ({ roomKey }) => {
       const roomChannel = `interview:${roomKey}`;
@@ -261,27 +256,53 @@ function setupSocketIO(server) {
       logger.info({ userId, roomKey }, "Left technical interview room");
     });
 
-    // Ephemeral Live Code Cursor / Selection Presence
-    socket.on("editor_cursor_move", ({ roomKey, cursor, file }) => {
+    // Ephemeral Live Code Cursor / Selection Presence - verify participant
+    socket.on("editor_cursor_move", async ({ roomKey, cursor, file }) => {
+      if (!roomKey) return;
+      try {
+        const InterviewSession = require("../../models/InterviewSession");
+        const session = await InterviewSession.findOne({ roomKey }).select("seeker recruiter additionalInterviewers").lean();
+        if (session) {
+          const isParticipant = String(session.seeker) === userId || String(session.recruiter) === userId || (session.additionalInterviewers || []).some((id) => String(id) === userId);
+          if (!isParticipant) return;
+        }
+      } catch { return; }
       socket.to(`interview:${roomKey}`).emit("peer_cursor_update", {
         userId,
         name: socket.user.name,
-        cursor, // { lineNumber, column }
+        cursor,
         file,
       });
     });
 
-    // Ephemeral Whiteboard Cursor Presence
-    socket.on("whiteboard_cursor_move", ({ roomKey, point }) => {
+    // Ephemeral Whiteboard Cursor Presence - verify participant
+    socket.on("whiteboard_cursor_move", async ({ roomKey, point }) => {
+      if (!roomKey) return;
+      try {
+        const InterviewSession = require("../../models/InterviewSession");
+        const session = await InterviewSession.findOne({ roomKey }).select("seeker recruiter additionalInterviewers").lean();
+        if (session) {
+          const isParticipant = String(session.seeker) === userId || String(session.recruiter) === userId || (session.additionalInterviewers || []).some((id) => String(id) === userId);
+          if (!isParticipant) return;
+        }
+      } catch { return; }
       socket.to(`interview:${roomKey}`).emit("peer_whiteboard_cursor", {
         userId,
         name: socket.user.name,
-        point, // { x, y }
+        point,
       });
     });
 
-    // Whiteboard Incremental Delta Synchronization
-    socket.on("whiteboard_delta", ({ roomKey, delta, snapshotVersion }) => {
+    // Whiteboard Incremental Delta Synchronization - verify participant
+    socket.on("whiteboard_delta", async ({ roomKey, delta, snapshotVersion }) => {
+      if (!roomKey) return;
+      try {
+        const InterviewSession = require("../../models/InterviewSession");
+        const session = await InterviewSession.findOne({ roomKey }).select("seeker recruiter additionalInterviewers").lean();
+        if (!session) return;
+        const isParticipant = String(session.seeker) === userId || String(session.recruiter) === userId || (session.additionalInterviewers || []).some((id) => String(id) === userId);
+        if (!isParticipant) return;
+      } catch { return; }
       socket.to(`interview:${roomKey}`).emit("whiteboard_delta_broadcast", {
         senderId: userId,
         delta,
@@ -289,8 +310,17 @@ function setupSocketIO(server) {
       });
     });
 
-    // Real-Time Live Transcript Broadcast
+    // Real-Time Live Transcript Broadcast - verify participant
     socket.on("transcript_chunk", async ({ roomKey, text, isFinal, offsetMs }) => {
+      if (!roomKey) return;
+      try {
+        const InterviewSession = require("../../models/InterviewSession");
+        const sessCheck = await InterviewSession.findOne({ roomKey }).select("seeker recruiter additionalInterviewers").lean();
+        if (sessCheck) {
+          const isPart = String(sessCheck.seeker) === userId || String(sessCheck.recruiter) === userId || (sessCheck.additionalInterviewers || []).some((id) => String(id) === userId);
+          if (!isPart) return;
+        }
+      } catch { return; }
       socket.to(`interview:${roomKey}`).emit("live_transcript_received", {
         senderId: userId,
         speakerName: socket.user.name,
@@ -323,10 +353,19 @@ function setupSocketIO(server) {
       }
     });
 
-    // Real-Time Interactive Terminal Streaming
-    socket.on("terminal_input", ({ roomKey, terminalId, data }) => {
+    // Real-Time Interactive Terminal Streaming — with participant verification
+    socket.on("terminal_input", async ({ roomKey, terminalId, data }) => {
       try {
         if (roomKey) {
+          // Verify participant before broadcast/exec
+          try {
+            const InterviewSession = require("../../models/InterviewSession");
+            const session = await InterviewSession.findOne({ roomKey }).select("seeker recruiter additionalInterviewers").lean();
+            if (session) {
+              const isParticipant = String(session.seeker) === userId || String(session.recruiter) === userId || (session.additionalInterviewers || []).some((id) => String(id) === userId);
+              if (!isParticipant) return;
+            }
+          } catch { return; }
           socket.to(`interview:${roomKey}`).emit("terminal_input_received", { terminalId, data, senderId: socket.user?._id });
         }
         const terminalService = require("../terminal/terminalService");
@@ -338,10 +377,28 @@ function setupSocketIO(server) {
       }
     });
 
-    socket.on("terminal_resize", ({ terminalId, cols, rows }) => {
+    socket.on("terminal_resize", async ({ terminalId, cols, rows }) => {
       try {
+        // Participant check for resize too — any authenticated user could resize arbitrary terminal
+        if (terminalId) {
+          try {
+            const terminalService = require("../terminal/terminalService");
+            const sess = terminalService.getTerminalSession(terminalId);
+            if (sess?.sessionId) {
+              const InterviewSession = require("../../models/InterviewSession");
+              const s = await InterviewSession.findById(sess.sessionId).select("seeker recruiter additionalInterviewers").lean();
+              if (s) {
+                const isParticipant = String(s.seeker) === userId || String(s.recruiter) === userId || (s.additionalInterviewers || []).some((id) => String(id) === userId);
+                if (!isParticipant) return;
+              }
+            }
+          } catch { return; }
+        }
+        // Clamp bounds 10-500 cols, 5-200 rows
+        const c = Math.max(10, Math.min(500, Number(cols) || 80));
+        const r = Math.max(5, Math.min(200, Number(rows) || 24));
         const terminalService = require("../terminal/terminalService");
-        Promise.resolve(terminalService.resizeTerminal(terminalId, cols, rows)).catch((err) => {
+        Promise.resolve(terminalService.resizeTerminal(terminalId, c, r)).catch((err) => {
           logger.debug({ err: err.message, terminalId }, "Terminal resize error");
         });
       } catch (err) {
@@ -349,37 +406,81 @@ function setupSocketIO(server) {
       }
     });
 
-    // Real-Time Signal & Copilot Coordination
-    socket.on("live_signal_extracted", ({ roomKey, signal }) => {
+    // Real-Time Signal & Copilot Coordination - verify participant + rate limiting & debouncing (Plan Phase 6)
+    socket.on("live_signal_extracted", async ({ roomKey, signal }) => {
       if (!roomKey || !signal) return;
-      socket.to(`interview:${roomKey}:interviewers`).emit("interview_signal_received", {
+      if (isSignalRateLimited(socket.id)) {
+        logger.debug({ socketId: socket.id, userId }, "Signal rate limited");
+        return;
+      }
+      // B12: per-session limit 100 signals/session
+      const sessionKey = signal.sessionId || signal.session_id || roomKey;
+      if (isSessionSignalRateLimited(sessionKey)) {
+        logger.debug({ sessionKey, socketId: socket.id }, "Session signal rate limited 100/session");
+        socket.emit("signal_rate_limited", { message: "Session signal limit 100 reached", sessionKey });
+        return;
+      }
+      try {
+        const InterviewSession = require("../../models/InterviewSession");
+        const session = await InterviewSession.findOne({ roomKey }).select("seeker recruiter additionalInterviewers").lean();
+        if (!session) return;
+        const isParticipant = String(session.seeker) === userId || String(session.recruiter) === userId || (session.additionalInterviewers || []).some((id) => String(id) === userId);
+        if (!isParticipant) return;
+      } catch { return; }
+      const payload = {
         senderId: userId,
         signal,
         receivedAt: new Date().toISOString(),
-      });
+      };
+      // Emit both legacy and canonical plan event names
+      socket.to(`interview:${roomKey}:interviewers`).emit("interview_signal_received", payload);
+      socket.to(`interview:${roomKey}:interviewers`).emit("interview_signal_emitted", payload);
+      if (signal.evidenceRef) {
+        socket.to(`interview:${roomKey}:interviewers`).emit("evidence_created", {
+          sessionId: signal.sessionId,
+          evidenceRef: signal.evidenceRef,
+          signalName: signal.name,
+          roomKey,
+        });
+      }
     });
 
     socket.on("copilot_hint_request", async ({ roomKey, code, language, currentStage }) => {
       if (!roomKey) return;
-      try {
-        const InterviewSession = require("../../models/InterviewSession");
-        const session = await InterviewSession.findOne({ roomKey }).populate("job").lean();
-        if (session) {
-          const interviewAssistant = require("../../modules/ai/interviewAssistant");
-          const followUp = await interviewAssistant.generateFollowUp({
-            session,
-            activeCode: code || "",
-            activeLanguage: language || "javascript",
-            currentStage: currentStage || "CODING",
-          });
-          io.to(`interview:${roomKey}:interviewers`).emit("copilot_hint_received", {
-            followUp,
-            generatedAt: new Date().toISOString(),
-          });
-        }
-      } catch (err) {
-        logger.debug({ err: err.message }, "Error generating copilot hint over socket");
+      if (isCopilotRateLimited(userId)) {
+        socket.emit("copilot_rate_limited", { message: "Copilot request rate limited. Try again shortly." });
+        return;
       }
+      const debounceKey = `${userId}:${roomKey}`;
+      if (copilotDebounceMap.has(debounceKey)) {
+        clearTimeout(copilotDebounceMap.get(debounceKey));
+      }
+      const timeout = setTimeout(async () => {
+        copilotDebounceMap.delete(debounceKey);
+        try {
+          const InterviewSession = require("../../models/InterviewSession");
+          const session = await InterviewSession.findOne({ roomKey }).select("seeker recruiter additionalInterviewers").populate("job").lean();
+          if (!session) return;
+          const isRecruiter = String(session.recruiter) === userId || (session.additionalInterviewers || []).some((id) => String(id) === userId);
+          if (!isRecruiter) return;
+          if (session) {
+            const interviewAssistant = require("../../modules/ai/interviewAssistant");
+            const followUp = await interviewAssistant.generateFollowUp({
+              session,
+              activeCode: code || "",
+              activeLanguage: language || "javascript",
+              currentStage: currentStage || "CODING",
+            });
+            io.to(`interview:${roomKey}:interviewers`).emit("copilot_hint_received", {
+              followUp,
+              generatedAt: new Date().toISOString(),
+            });
+          }
+        } catch (err) {
+          logger.debug({ err: err.message }, "Error generating copilot hint over socket");
+        }
+      }, COPILOT_DEBOUNCE_MS);
+      copilotDebounceMap.set(debounceKey, timeout);
     });
 
     // ==========================================
@@ -394,22 +495,189 @@ function setupSocketIO(server) {
       logger.info({ userId, pin }, "Joined competition lobby");
     });
 
-    socket.on("start_comp", ({ pin }) => {
-      io.to(`comp_lobby:${pin}`).emit("comp_started", {
-        startedAt: new Date().toISOString()
-      });
+    socket.on("start_comp", async ({ pin }) => {
+      try {
+        const CompetitionLobby = require("../../models/CompetitionLobby");
+        const lobby = await CompetitionLobby.findOne({ pin });
+        if (!lobby || String(lobby.hostId) !== userId) return;
+
+        if (lobby.mode === "QUIZ" && lobby.quizData && lobby.quizData.length > 0) {
+          lobby.status = "PLAYING";
+          lobby.currentQuestionIndex = 0;
+          lobby.questionStartTime = new Date();
+          await lobby.save();
+
+          // Broadcast first question with server timestamp for sync
+          io.to(`comp_lobby:${pin}`).emit("comp_started", {
+            startedAt: lobby.questionStartTime.toISOString(),
+            questionIndex: 0,
+            question: lobby.quizData[0],
+            timeLimitSeconds: lobby.quizData[0].timeLimitSeconds || 20,
+          });
+        } else if (lobby.mode === "CP") {
+          lobby.status = "PLAYING";
+          await lobby.save();
+          io.to(`comp_lobby:${pin}`).emit("comp_started", {
+            startedAt: new Date().toISOString(),
+          });
+        }
+      } catch (err) {
+        logger.error({ err: err.message }, "Error starting competition");
+      }
     });
 
-    socket.on("submit_comp_answer", ({ pin, questionIndex, isCorrect, scoreDelta }) => {
-      // In a real prod environment we'd validate this against Redis or DB
-      io.to(`comp_lobby:${pin}`).emit("comp_score_update", {
-        userId,
-        questionIndex,
-        isCorrect,
-        scoreDelta
-      });
+    socket.on("submit_comp_answer", async ({ pin, questionIndex, answer }) => {
+      try {
+        const CompetitionLobby = require("../../models/CompetitionLobby");
+        const lobby = await CompetitionLobby.findOne({ pin });
+        if (!lobby || lobby.status !== "PLAYING" || lobby.mode !== "QUIZ") return;
+
+        const question = lobby.quizData?.[questionIndex];
+        if (!question) return;
+
+        // Validate answer server-side
+        const isCorrect = answer === question.correctAnswer;
+        
+        // Calculate score with speed multiplier
+        const questionStartTime = lobby.questionStartTime ? new Date(lobby.questionStartTime).getTime() : Date.now();
+        const timeElapsed = (Date.now() - questionStartTime) / 1000;
+        const timeLimit = question.timeLimitSeconds || 20;
+        const timeLeft = Math.max(0, timeLimit - timeElapsed);
+        
+        let scoreDelta = 0;
+        if (isCorrect) {
+          // Base 100 points + speed bonus (up to 100 more based on time left)
+          scoreDelta = Math.round(100 + (timeLeft / timeLimit) * 100);
+        }
+
+        // Update player score in lobby
+        const player = lobby.players.find(p => String(p.userId) === String(userId));
+        if (player) {
+          player.score = (player.score || 0) + scoreDelta;
+          player.lastAnswerTime = new Date();
+        }
+
+        await lobby.save();
+
+        // Broadcast validated score update
+        io.to(`comp_lobby:${pin}`).emit("comp_score_update", {
+          userId,
+          questionIndex,
+          isCorrect,
+          scoreDelta,
+          correctAnswer: question.correctAnswer, // Send correct answer for reveal
+        });
+      } catch (err) {
+        logger.error({ err: err.message }, "Error processing quiz answer");
+      }
     });
 
+    socket.on("next_question", async ({ pin }) => {
+      try {
+        const CompetitionLobby = require("../../models/CompetitionLobby");
+        const lobby = await CompetitionLobby.findOne({ pin });
+        if (!lobby || String(lobby.hostId) !== userId || lobby.mode !== "QUIZ") return;
+
+        const nextIndex = lobby.currentQuestionIndex + 1;
+        if (nextIndex >= (lobby.quizData?.length || 0)) {
+          // Quiz complete
+          lobby.status = "LEADERBOARD";
+          lobby.currentQuestionIndex = nextIndex;
+          await lobby.save();
+          io.to(`comp_lobby:${pin}`).emit("quiz_complete", {
+            finalScores: lobby.players.map(p => ({
+              userId: p.userId,
+              name: p.name,
+              score: p.score || 0,
+            })).sort((a, b) => b.score - a.score),
+          });
+          return;
+        }
+
+        lobby.currentQuestionIndex = nextIndex;
+        lobby.questionStartTime = new Date();
+        await lobby.save();
+
+        const nextQuestion = lobby.quizData[nextIndex];
+        io.to(`comp_lobby:${pin}`).emit("question_changed", {
+          questionIndex: nextIndex,
+          question: nextQuestion,
+          timeLimitSeconds: nextQuestion.timeLimitSeconds || 20,
+          startedAt: lobby.questionStartTime.toISOString(),
+        });
+      } catch (err) {
+        logger.error({ err: err.message }, "Error advancing question");
+      }
+    });
+
+    socket.on("submit_cp_solution", async ({ pin, code, language }) => {
+      try {
+        const CompetitionLobby = require("../../models/CompetitionLobby");
+        const { runTestCases } = require("../../infrastructure/sandbox/sandboxService");
+        
+        const lobby = await CompetitionLobby.findOne({ pin });
+        if (!lobby || lobby.status !== "PLAYING" || lobby.mode !== "CP") return;
+
+        const cpData = lobby.cpData;
+        if (!cpData || !cpData.testCases || cpData.testCases.length === 0) return;
+
+        // Run test cases in sandbox
+        const testResult = await runTestCases({
+          language: language || "javascript",
+          code,
+          testCases: cpData.testCases,
+        });
+
+        const passedCount = testResult.passedCount;
+        const totalCount = testResult.totalCount;
+        
+        // Calculate score: base points for each passed test + bonus for all passed
+        let scoreDelta = passedCount * 20;
+        if (passedCount === totalCount) scoreDelta += 100; // Perfect bonus
+
+        // Update player score
+        const player = lobby.players.find(p => String(p.userId) === String(userId));
+        if (player) {
+          player.score = (player.score || 0) + scoreDelta;
+          player.testCasesPassed = Math.max(player.testCasesPassed || 0, passedCount);
+          player.lastAnswerTime = new Date();
+        }
+
+        await lobby.save();
+
+        // Broadcast results
+        io.to(`comp_lobby:${pin}`).emit("cp_score_update", {
+          userId,
+          testCasesPassed: passedCount,
+          totalTestCases: totalCount,
+          scoreDelta,
+          allPassed: passedCount === totalCount,
+          testResults: testResult.results,
+        });
+
+        // Check if someone solved it completely
+        if (passedCount === totalCount) {
+          const winner = lobby.players.find(p => String(p.userId) === String(userId));
+          if (winner) {
+            lobby.status = "LEADERBOARD";
+            await lobby.save();
+            io.to(`comp_lobby:${pin}`).emit("cp_complete", {
+              finalScores: lobby.players.map(p => ({
+                userId: p.userId,
+                name: p.name,
+                score: p.score || 0,
+                testCasesPassed: p.testCasesPassed || 0,
+              })).sort((a, b) => b.score - a.score),
+              winner: winner.name,
+            });
+          }
+        }
+      } catch (err) {
+        logger.error({ err: err.message }, "Error processing CP solution");
+      }
+    });
+
+    // Legacy handler - keep for backward compat but deprecate
     socket.on("submit_cp_testcase", ({ pin, testCasesPassed }) => {
       io.to(`comp_lobby:${pin}`).emit("cp_score_update", {
         userId,
