@@ -1,0 +1,8 @@
+node_modules
+.env
+uploads
+coverage
+.git.backup/
+scratch/
+*.log
+*.txt

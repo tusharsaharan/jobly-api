@@ -1,0 +1,786 @@
+{
+  "problems": [
+    {
+      "id": "design-url-shortener-like-tinyurl",
+      "slug": "design-url-shortener-like-tinyurl",
+      "title": "Design URL Shortener like TinyURL",
+      "difficulty": "Easy",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://algomaster.io/learn/system-design-interviews/design-url-shortener",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design URL Shortener like TinyURL."
+    },
+    {
+      "id": "design-autocomplete-for-search-engines",
+      "slug": "design-autocomplete-for-search-engines",
+      "title": "Design Autocomplete for Search Engines",
+      "difficulty": "Easy",
+      "category": "Search & Big Data",
+      "patterns": [
+        "Inverted Index / Trie",
+        "MapReduce / Spark",
+        "Top-K"
+      ],
+      "referenceUrl": "https://algomaster.io/learn/system-design-interviews/design-instagram",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Autocomplete for Search Engines."
+    },
+    {
+      "id": "design-load-balancer",
+      "slug": "design-load-balancer",
+      "title": "Design Load Balancer",
+      "difficulty": "Easy",
+      "category": "Core Distributed Infra",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://algomaster.io/learn/system-design-interviews/design-load-balancer",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Load Balancer."
+    },
+    {
+      "id": "design-content-delivery-network-cdn",
+      "slug": "design-content-delivery-network-cdn",
+      "title": "Design Content Delivery Network (CDN)",
+      "difficulty": "Easy",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=8zX0rue2Hic",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Content Delivery Network (CDN)."
+    },
+    {
+      "id": "design-parking-garage",
+      "slug": "design-parking-garage",
+      "title": "Design Parking Garage",
+      "difficulty": "Easy",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=NtMvNh0WFVM",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Parking Garage."
+    },
+    {
+      "id": "design-vending-machine",
+      "slug": "design-vending-machine",
+      "title": "Design Vending Machine",
+      "difficulty": "Easy",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=D0kDMUgo27c",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Vending Machine."
+    },
+    {
+      "id": "design-distributed-key-value-store",
+      "slug": "design-distributed-key-value-store",
+      "title": "Design Distributed Key-Value Store",
+      "difficulty": "Easy",
+      "category": "Core Distributed Infra",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=rnZmdmlR-2M",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Distributed Key-Value Store."
+    },
+    {
+      "id": "design-distributed-cache",
+      "slug": "design-distributed-cache",
+      "title": "Design Distributed Cache",
+      "difficulty": "Easy",
+      "category": "Core Distributed Infra",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=iuqZvajTOyA",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Distributed Cache."
+    },
+    {
+      "id": "design-authentication-system",
+      "slug": "design-authentication-system",
+      "title": "Design Authentication System",
+      "difficulty": "Easy",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=uj_4vxm9u90",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Authentication System."
+    },
+    {
+      "id": "design-unified-payments-interface-upi",
+      "slug": "design-unified-payments-interface-upi",
+      "title": "Design Unified Payments Interface (UPI)",
+      "difficulty": "Easy",
+      "category": "E-Commerce & FinTech",
+      "patterns": [
+        "Idempotency",
+        "Saga Pattern",
+        "Distributed Locking"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=QpLy0_c_RXk",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Unified Payments Interface (UPI)."
+    },
+    {
+      "id": "design-whatsapp",
+      "slug": "design-whatsapp",
+      "title": "Design WhatsApp",
+      "difficulty": "Medium",
+      "category": "Real-Time & Messaging",
+      "patterns": [
+        "WebSockets",
+        "Pub/Sub",
+        "Actor Model"
+      ],
+      "referenceUrl": "https://algomaster.io/learn/system-design-interviews/design-whatsapp",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design WhatsApp."
+    },
+    {
+      "id": "design-spotify",
+      "slug": "design-spotify",
+      "title": "Design Spotify",
+      "difficulty": "Medium",
+      "category": "Media & Streaming",
+      "patterns": [
+        "Adaptive Bitrate (HLS/DASH)",
+        "CDN Edge",
+        "Transcoding Pipeline"
+      ],
+      "referenceUrl": "https://algomaster.io/learn/system-design-interviews/design-spotify",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Spotify."
+    },
+    {
+      "id": "design-instagram",
+      "slug": "design-instagram",
+      "title": "Design Instagram",
+      "difficulty": "Medium",
+      "category": "Social & Feed Systems",
+      "patterns": [
+        "Fan-out-on-Write",
+        "Fan-out-on-Read",
+        "Redis Cache"
+      ],
+      "referenceUrl": "https://algomaster.io/learn/system-design-interviews/design-instagram",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Instagram."
+    },
+    {
+      "id": "design-notification-service",
+      "slug": "design-notification-service",
+      "title": "Design Notification Service",
+      "difficulty": "Medium",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://algomaster.io/learn/system-design-interviews/design-notification-service",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Notification Service."
+    },
+    {
+      "id": "design-distributed-job-scheduler",
+      "slug": "design-distributed-job-scheduler",
+      "title": "Design Distributed Job Scheduler",
+      "difficulty": "Medium",
+      "category": "Core Distributed Infra",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://blog.algomaster.io/p/design-a-distributed-job-scheduler",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Distributed Job Scheduler."
+    },
+    {
+      "id": "design-tinder",
+      "slug": "design-tinder",
+      "title": "Design Tinder",
+      "difficulty": "Medium",
+      "category": "Social & Feed Systems",
+      "patterns": [
+        "Fan-out-on-Write",
+        "Fan-out-on-Read",
+        "Redis Cache"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=tndzLznxq40",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Tinder."
+    },
+    {
+      "id": "design-facebook",
+      "slug": "design-facebook",
+      "title": "Design Facebook",
+      "difficulty": "Medium",
+      "category": "Social & Feed Systems",
+      "patterns": [
+        "Fan-out-on-Write",
+        "Fan-out-on-Read",
+        "Redis Cache"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=9-hjBGxuiEs",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Facebook."
+    },
+    {
+      "id": "design-twitter",
+      "slug": "design-twitter",
+      "title": "Design Twitter",
+      "difficulty": "Medium",
+      "category": "Social & Feed Systems",
+      "patterns": [
+        "Fan-out-on-Write",
+        "Fan-out-on-Read",
+        "Redis Cache"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=wYk0xPP_P_8",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Twitter."
+    },
+    {
+      "id": "design-reddit",
+      "slug": "design-reddit",
+      "title": "Design Reddit",
+      "difficulty": "Medium",
+      "category": "Social & Feed Systems",
+      "patterns": [
+        "Fan-out-on-Write",
+        "Fan-out-on-Read",
+        "Redis Cache"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=KYExYE_9nIY",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Reddit."
+    },
+    {
+      "id": "design-netflix",
+      "slug": "design-netflix",
+      "title": "Design Netflix",
+      "difficulty": "Medium",
+      "category": "Media & Streaming",
+      "patterns": [
+        "Adaptive Bitrate (HLS/DASH)",
+        "CDN Edge",
+        "Transcoding Pipeline"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=psQzyFfsUGU",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Netflix."
+    },
+    {
+      "id": "design-youtube",
+      "slug": "design-youtube",
+      "title": "Design Youtube",
+      "difficulty": "Medium",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=jPKTo1iGQiE",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Youtube."
+    },
+    {
+      "id": "design-google-search",
+      "slug": "design-google-search",
+      "title": "Design Google Search",
+      "difficulty": "Medium",
+      "category": "Search & Big Data",
+      "patterns": [
+        "Inverted Index / Trie",
+        "MapReduce / Spark",
+        "Top-K"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=CeGtqouT8eA",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Google Search."
+    },
+    {
+      "id": "design-e-commerce-store-like-amazon",
+      "slug": "design-e-commerce-store-like-amazon",
+      "title": "Design E-commerce Store like Amazon",
+      "difficulty": "Medium",
+      "category": "E-Commerce & FinTech",
+      "patterns": [
+        "Idempotency",
+        "Saga Pattern",
+        "Distributed Locking"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=EpASu_1dUdE",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design E-commerce Store like Amazon."
+    },
+    {
+      "id": "design-tiktok",
+      "slug": "design-tiktok",
+      "title": "Design TikTok",
+      "difficulty": "Medium",
+      "category": "Social & Feed Systems",
+      "patterns": [
+        "Fan-out-on-Write",
+        "Fan-out-on-Read",
+        "Redis Cache"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=Z-0g_aJL5Fw",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design TikTok."
+    },
+    {
+      "id": "design-shopify",
+      "slug": "design-shopify",
+      "title": "Design Shopify",
+      "difficulty": "Medium",
+      "category": "E-Commerce & FinTech",
+      "patterns": [
+        "Idempotency",
+        "Saga Pattern",
+        "Distributed Locking"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=lEL4F_0J3l8",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Shopify."
+    },
+    {
+      "id": "design-airbnb",
+      "slug": "design-airbnb",
+      "title": "Design Airbnb",
+      "difficulty": "Medium",
+      "category": "E-Commerce & FinTech",
+      "patterns": [
+        "Idempotency",
+        "Saga Pattern",
+        "Distributed Locking"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=YyOXt2MEkv4",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Airbnb."
+    },
+    {
+      "id": "design-rate-limiter",
+      "slug": "design-rate-limiter",
+      "title": "Design Rate Limiter",
+      "difficulty": "Medium",
+      "category": "Core Distributed Infra",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=mhUQe4BKZXs",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Rate Limiter."
+    },
+    {
+      "id": "design-distributed-message-queue-like-kafka",
+      "slug": "design-distributed-message-queue-like-kafka",
+      "title": "Design Distributed Message Queue like Kafka",
+      "difficulty": "Medium",
+      "category": "Core Distributed Infra",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=iJLL-KPqBpM",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Distributed Message Queue like Kafka."
+    },
+    {
+      "id": "design-flight-booking-system",
+      "slug": "design-flight-booking-system",
+      "title": "Design Flight Booking System",
+      "difficulty": "Medium",
+      "category": "E-Commerce & FinTech",
+      "patterns": [
+        "Idempotency",
+        "Saga Pattern",
+        "Distributed Locking"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=qsGcfVGvFSs",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Flight Booking System."
+    },
+    {
+      "id": "design-online-code-editor",
+      "slug": "design-online-code-editor",
+      "title": "Design Online Code Editor",
+      "difficulty": "Medium",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=07jkn4jUtso",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Online Code Editor."
+    },
+    {
+      "id": "design-analytics-platform-metrics-logging",
+      "slug": "design-analytics-platform-metrics-logging",
+      "title": "Design Analytics Platform (Metrics & Logging)",
+      "difficulty": "Medium",
+      "category": "Search & Big Data",
+      "patterns": [
+        "Inverted Index / Trie",
+        "MapReduce / Spark",
+        "Top-K"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=kIcq1_pBQSY",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Analytics Platform (Metrics & Logging)."
+    },
+    {
+      "id": "design-payment-system",
+      "slug": "design-payment-system",
+      "title": "Design Payment System",
+      "difficulty": "Medium",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=olfaBgJrUBI",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Payment System."
+    },
+    {
+      "id": "design-digital-wallet",
+      "slug": "design-digital-wallet",
+      "title": "Design Digital Wallet",
+      "difficulty": "Medium",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=4ijjIUeq6hE",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Digital Wallet."
+    },
+    {
+      "id": "design-location-based-service-like-yelp",
+      "slug": "design-location-based-service-like-yelp",
+      "title": "Design Location Based Service like Yelp",
+      "difficulty": "Hard",
+      "category": "Geospatial & On-Demand",
+      "patterns": [
+        "Geohash / Uber H3",
+        "Kafka Streaming",
+        "Spatial Index"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=M4lR_Va97cQ",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Location Based Service like Yelp."
+    },
+    {
+      "id": "design-uber",
+      "slug": "design-uber",
+      "title": "Design Uber",
+      "difficulty": "Hard",
+      "category": "Geospatial & On-Demand",
+      "patterns": [
+        "Geohash / Uber H3",
+        "Kafka Streaming",
+        "Spatial Index"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=umWABit-wbk",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Uber."
+    },
+    {
+      "id": "design-food-delivery-app-like-doordash",
+      "slug": "design-food-delivery-app-like-doordash",
+      "title": "Design Food Delivery App like Doordash",
+      "difficulty": "Hard",
+      "category": "Geospatial & On-Demand",
+      "patterns": [
+        "Geohash / Uber H3",
+        "Kafka Streaming",
+        "Spatial Index"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=iRhSAR3ldTw",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Food Delivery App like Doordash."
+    },
+    {
+      "id": "design-google-docs",
+      "slug": "design-google-docs",
+      "title": "Design Google Docs",
+      "difficulty": "Hard",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=2auwirNBvGg",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Google Docs."
+    },
+    {
+      "id": "design-google-maps",
+      "slug": "design-google-maps",
+      "title": "Design Google Maps",
+      "difficulty": "Hard",
+      "category": "Geospatial & On-Demand",
+      "patterns": [
+        "Geohash / Uber H3",
+        "Kafka Streaming",
+        "Spatial Index"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=jk3yvVfNvds",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Google Maps."
+    },
+    {
+      "id": "design-zoom",
+      "slug": "design-zoom",
+      "title": "Design Zoom",
+      "difficulty": "Hard",
+      "category": "Real-Time & Messaging",
+      "patterns": [
+        "WebSockets",
+        "Pub/Sub",
+        "Actor Model"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=G32ThJakeHk",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Zoom."
+    },
+    {
+      "id": "design-file-sharing-system-like-dropbox",
+      "slug": "design-file-sharing-system-like-dropbox",
+      "title": "Design File Sharing System like Dropbox",
+      "difficulty": "Hard",
+      "category": "Storage & Blob Systems",
+      "patterns": [
+        "Chunking",
+        "Consistent Hashing",
+        "S3 Multipart"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=U0xTu6E2CT8",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design File Sharing System like Dropbox."
+    },
+    {
+      "id": "design-ticket-booking-system-like-bookmyshow",
+      "slug": "design-ticket-booking-system-like-bookmyshow",
+      "title": "Design Ticket Booking System like BookMyShow",
+      "difficulty": "Hard",
+      "category": "E-Commerce & FinTech",
+      "patterns": [
+        "Idempotency",
+        "Saga Pattern",
+        "Distributed Locking"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=lBAwJgoO3Ek",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Ticket Booking System like BookMyShow."
+    },
+    {
+      "id": "design-distributed-web-crawler",
+      "slug": "design-distributed-web-crawler",
+      "title": "Design Distributed Web Crawler",
+      "difficulty": "Hard",
+      "category": "Search & Big Data",
+      "patterns": [
+        "Inverted Index / Trie",
+        "MapReduce / Spark",
+        "Top-K"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=BKZxZwUgL3Y",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Distributed Web Crawler."
+    },
+    {
+      "id": "design-code-deployment-system",
+      "slug": "design-code-deployment-system",
+      "title": "Design Code Deployment System",
+      "difficulty": "Hard",
+      "category": "General Architecture",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=q0KGYwNbf-0",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Code Deployment System."
+    },
+    {
+      "id": "design-distributed-cloud-storage-like-s3",
+      "slug": "design-distributed-cloud-storage-like-s3",
+      "title": "Design Distributed Cloud Storage like S3",
+      "difficulty": "Hard",
+      "category": "Storage & Blob Systems",
+      "patterns": [
+        "Chunking",
+        "Consistent Hashing",
+        "S3 Multipart"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=UmWtcgC96X8",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Distributed Cloud Storage like S3."
+    },
+    {
+      "id": "design-distributed-locking-service",
+      "slug": "design-distributed-locking-service",
+      "title": "Design Distributed Locking Service",
+      "difficulty": "Hard",
+      "category": "Core Distributed Infra",
+      "patterns": [
+        "Consistent Hashing",
+        "Leader Election",
+        "LSM-Tree"
+      ],
+      "referenceUrl": "https://www.youtube.com/watch?v=v7x75aN9liM",
+      "githubUrl": "https://github.com/ashishps1/awesome-system-design-resources",
+      "summary": "Scalability blueprints, database partitioning, caching topology, and API contracts for Design Distributed Locking Service."
+    }
+  ],
+  "papers": [
+    {
+      "title": "Paxos: The Part-Time Parliament",
+      "url": "https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf"
+    },
+    {
+      "title": "MapReduce: Simplified Data Processing on Large Clusters",
+      "url": "https://research.google.com/archive/mapreduce-osdi04.pdf"
+    },
+    {
+      "title": "The Google File System",
+      "url": "https://static.googleusercontent.com/media/research.google.com/en//archive/gfs-sosp2003.pdf"
+    },
+    {
+      "title": "Dynamo: Amazon’s Highly Available Key-value Store",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    },
+    {
+      "title": "Kafka: a Distributed Messaging System for Log Processing",
+      "url": "https://notes.stephenholiday.com/Kafka.pdf"
+    },
+    {
+      "title": "Spanner: Google’s Globally-Distributed Database",
+      "url": "https://static.googleusercontent.com/media/research.google.com/en//archive/spanner-osdi2012.pdf"
+    },
+    {
+      "title": "Bigtable: A Distributed Storage System for Structured Data",
+      "url": "https://static.googleusercontent.com/media/research.google.com/en//archive/bigtable-osdi06.pdf"
+    },
+    {
+      "title": "ZooKeeper: Wait-free coordination for Internet-scale systems",
+      "url": "https://www.usenix.org/legacy/event/usenix10/tech/full_papers/Hunt.pdf"
+    },
+    {
+      "title": "The Log-Structured Merge-Tree (LSM-Tree)",
+      "url": "https://www.cs.umb.edu/~poneil/lsmtree.pdf"
+    },
+    {
+      "title": "The Chubby lock service for loosely-coupled distributed systems",
+      "url": "https://static.googleusercontent.com/media/research.google.com/en//archive/chubby-osdi06.pdf"
+    }
+  ],
+  "articles": [
+    {
+      "title": "How Discord stores trillions of messages",
+      "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+    },
+    {
+      "title": "Building In-Video Search at Netflix",
+      "url": "https://netflixtechblog.com/building-in-video-search-936766f0017c"
+    },
+    {
+      "title": "How Canva scaled Media uploads from Zero to 50 Million per Day",
+      "url": "https://www.canva.dev/blog/engineering/from-zero-to-50-million-uploads-per-day-scaling-media-at-canva/"
+    },
+    {
+      "title": "How Airbnb avoids double payments in a Distributed Payments System",
+      "url": "https://medium.com/airbnb-engineering/avoiding-double-payments-in-a-distributed-payments-system-2981f6b070bb"
+    },
+    {
+      "title": "Stripe’s payments APIs - The first 10 years",
+      "url": "https://stripe.com/blog/payment-api-design"
+    },
+    {
+      "title": "Real time messaging at Slack",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  ],
+  "concepts": [
+    {
+      "title": "Scalability",
+      "url": "https://algomaster.io/learn/system-design/scalability"
+    },
+    {
+      "title": "Availability",
+      "url": "https://algomaster.io/learn/system-design/availability"
+    },
+    {
+      "title": "Reliability",
+      "url": "https://algomaster.io/learn/system-design/reliability"
+    },
+    {
+      "title": "SPOF",
+      "url": "https://algomaster.io/learn/system-design/single-point-of-failure-spof"
+    },
+    {
+      "title": "Latency vs Throughput vs Bandwidth",
+      "url": "https://algomaster.io/learn/system-design/latency-vs-throughput"
+    },
+    {
+      "title": "Consistent Hashing",
+      "url": "https://algomaster.io/learn/system-design/consistent-hashing"
+    },
+    {
+      "title": "CAP Theorem",
+      "url": "https://algomaster.io/learn/system-design/cap-theorem"
+    },
+    {
+      "title": "Failover",
+      "url": "https://www.druva.com/glossary/what-is-a-failover-definition-and-related-faqs"
+    },
+    {
+      "title": "Fault Tolerance",
+      "url": "https://www.cockroachlabs.com/blog/what-is-fault-tolerance/"
+    }
+  ],
+  "total": 45
+}

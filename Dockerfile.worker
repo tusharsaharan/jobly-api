@@ -1,0 +1,20 @@
+# ==============================================================================
+# Worker Dockerfile for Jobly Async BullMQ & AI Pipeline
+# ==============================================================================
+
+FROM node:22-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+
+USER node
+
+COPY --chown=node:node --from=builder /app/node_modules ./node_modules
+COPY --chown=node:node . .
+
+ENV NODE_ENV=production
+
+CMD ["node", "src/workers/worker.entry.js"]

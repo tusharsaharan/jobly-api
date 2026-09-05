@@ -1,0 +1,833 @@
+[
+  {
+    "id": "airline-management-system",
+    "slug": "airline-management-system",
+    "title": "Airline Management System",
+    "category": "Reservation & Booking",
+    "difficulty": "Hard",
+    "patterns": [
+      "Factory",
+      "Singleton"
+    ],
+    "summary": "The airline management system should allow users to search for flights based on source, destination, and date.",
+    "requirements": [
+      "The airline management system should allow users to search for flights based on source, destination, and date.",
+      "Users should be able to book flights, select seats, and make payments.",
+      "The system should manage flight schedules, aircraft assignments, and crew assignments.",
+      "The system should handle passenger information, including personal details and baggage information.",
+      "The system should support different types of users, such as passengers, airline staff, and administrators.",
+      "The system should be able to handle cancellations, refunds, and flight changes."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/airline-management-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/airline_management_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/airline_management_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/airline_management_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/airline_management_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/airline_management_system"
+  },
+  {
+    "id": "atm",
+    "slug": "atm",
+    "title": "ATM System",
+    "category": "FinTech & Commerce",
+    "difficulty": "Medium",
+    "patterns": [
+      "State"
+    ],
+    "summary": "The ATM system should support basic operations such as balance inquiry, cash withdrawal, and cash deposit.",
+    "requirements": [
+      "The ATM system should support basic operations such as balance inquiry, cash withdrawal, and cash deposit.",
+      "Users should be able to authenticate themselves using a card and a PIN (Personal Identification Number).",
+      "The system should interact with a bank's backend system to validate user accounts and perform transactions.",
+      "The ATM should have a cash dispenser to dispense cash to users.",
+      "The system should handle concurrent access and ensure data consistency.",
+      "The ATM should have a user-friendly interface for users to interact with."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/atm.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/atm",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/atm",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/atm",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/atm",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/atm"
+  },
+  {
+    "id": "car-rental-system",
+    "slug": "car-rental-system",
+    "title": "Car Rental System",
+    "category": "Reservation & Booking",
+    "difficulty": "Medium",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "The car rental system should allow customers to browse and reserve available cars for specific dates.",
+    "requirements": [
+      "The car rental system should allow customers to browse and reserve available cars for specific dates.",
+      "Each car should have details such as make, model, year, license plate number, and rental price per day.",
+      "Customers should be able to search for cars based on various criteria, such as car type, price range, and availability.",
+      "The system should handle reservations, including creating, modifying, and canceling reservations.",
+      "The system should keep track of the availability of cars and update their status accordingly.",
+      "The system should handle customer information, including name, contact details, and driver's license information."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/car-rental-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/car_rental_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/car_rental_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/car_rental_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/car_rental_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/car_rental_system"
+  },
+  {
+    "id": "chess-game",
+    "slug": "chess-game",
+    "title": "Chess Game",
+    "category": "Games & Sports",
+    "difficulty": "Medium",
+    "patterns": [
+      "Command"
+    ],
+    "summary": "The chess game should follow the standard rules of chess.",
+    "requirements": [
+      "The chess game should follow the standard rules of chess.",
+      "The game should support two players, each controlling their own set of pieces.",
+      "The game board should be represented as an 8x8 grid, with alternating black and white squares.",
+      "Each player should have 16 pieces: 1 king, 1 queen, 2 rooks, 2 bishops, 2 knights, and 8 pawns.",
+      "The game should validate legal moves for each piece and prevent illegal moves.",
+      "The game should detect checkmate and stalemate conditions."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/chess-game.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/chess_game",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/chess_game",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/chess_game",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/chess_game",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/chess_game"
+  },
+  {
+    "id": "coffee-vending-machine",
+    "slug": "coffee-vending-machine",
+    "title": "Coffee Vending Machine",
+    "category": "Hardware & Real-World",
+    "difficulty": "Easy",
+    "patterns": [
+      "State",
+      "Singleton"
+    ],
+    "summary": "The coffee vending machine should support different types of coffee, such as espresso, cappuccino, and latte.",
+    "requirements": [
+      "The coffee vending machine should support different types of coffee, such as espresso, cappuccino, and latte.",
+      "Each type of coffee should have a specific price and recipe (ingredients and their quantities).",
+      "The machine should have a menu to display the available coffee options and their prices.",
+      "Users should be able to select a coffee type and make a payment.",
+      "The machine should dispense the selected coffee and provide change if necessary.",
+      "The machine should track the inventory of ingredients and notify when they are running low."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/coffee-vending-machine.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/coffee_vending_machine",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/coffee_vending_machine",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/coffee_vending_machine",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/coffee_vending_machine",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/coffee_vending_machine"
+  },
+  {
+    "id": "concert-ticket-booking-system",
+    "slug": "concert-ticket-booking-system",
+    "title": "Concert Ticket Booking System",
+    "category": "Reservation & Booking",
+    "difficulty": "Medium",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "The concert ticket booking system should allow users to view available concerts and their seating arrangements.",
+    "requirements": [
+      "The concert ticket booking system should allow users to view available concerts and their seating arrangements.",
+      "Users should be able to search for concerts based on various criteria such as artist, venue, date, and time.",
+      "Users should be able to select seats and purchase tickets for a specific concert.",
+      "The system should handle concurrent booking requests to avoid double-booking of seats.",
+      "The system should ensure fair booking opportunities for all users.",
+      "The system should handle payment processing securely."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/concert-ticket-booking-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/concert_ticket_booking_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/concert_ticket_booking_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/concert_ticket_booking_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/concert_ticket_booking_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/concert_ticket_booking_system"
+  },
+  {
+    "id": "course-registration-system",
+    "slug": "course-registration-system",
+    "title": "University Course Registration System",
+    "category": "Management Systems",
+    "difficulty": "Medium",
+    "patterns": [
+      "Observer",
+      "Singleton"
+    ],
+    "summary": "The course registration system should allow students to register for courses and view their registered courses.",
+    "requirements": [
+      "The course registration system should allow students to register for courses and view their registered courses.",
+      "Each course should have a course code, name, instructor, and maximum enrollment capacity.",
+      "Students should be able to search for courses based on course code or name.",
+      "The system should prevent students from registering for courses that have reached their maximum enrollment capacity.",
+      "The system should handle concurrent registration requests from multiple students.",
+      "The system should ensure data consistency and prevent race conditions."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/course-registration-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/course_registration_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/course_registration_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/course_registration_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/course_registration_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/course_registration_system"
+  },
+  {
+    "id": "cricinfo",
+    "slug": "cricinfo",
+    "title": "Cricket Information System like CricInfo",
+    "category": "Games & Sports",
+    "difficulty": "Hard",
+    "patterns": [
+      "Observer",
+      "Singleton"
+    ],
+    "summary": "The Cricinfo system should provide information about cricket matches, teams, players, and live scores.",
+    "requirements": [
+      "The Cricinfo system should provide information about cricket matches, teams, players, and live scores.",
+      "Users should be able to view the schedule of upcoming matches and the results of completed matches.",
+      "The system should allow users to search for specific matches, teams, or players.",
+      "Users should be able to view detailed information about a particular match, including the scorecard, commentary, and statistics.",
+      "The system should support real-time updates of live scores and match information.",
+      "The system should handle concurrent access to match data and ensure data consistency."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/cricinfo.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/cricinfo",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/cricinfo",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/cricinfo",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/cricinfo",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/cricinfo"
+  },
+  {
+    "id": "digital-wallet-service",
+    "slug": "digital-wallet-service",
+    "title": "Digital Wallet Service",
+    "category": "FinTech & Commerce",
+    "difficulty": "Medium",
+    "patterns": [
+      "State",
+      "Singleton"
+    ],
+    "summary": "The digital wallet should allow users to create an account and manage their personal information.",
+    "requirements": [
+      "The digital wallet should allow users to create an account and manage their personal information.",
+      "Users should be able to add and remove payment methods, such as credit cards or bank accounts.",
+      "The digital wallet should support fund transfers between users and to external accounts.",
+      "The system should handle transaction history and provide a statement of transactions.",
+      "The digital wallet should support multiple currencies and perform currency conversions.",
+      "The system should ensure the security of user information and transactions."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/digital-wallet-service.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/digital_wallet_service",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/digital_wallet_service",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/digital_wallet_service",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/digital_wallet_service",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/digital_wallet_service"
+  },
+  {
+    "id": "elevator-system",
+    "slug": "elevator-system",
+    "title": "Elevator System",
+    "category": "Hardware & Real-World",
+    "difficulty": "Hard",
+    "patterns": [
+      "State"
+    ],
+    "summary": "The elevator system should consist of multiple elevators serving multiple floors.",
+    "requirements": [
+      "The elevator system should consist of multiple elevators serving multiple floors.",
+      "Each elevator should have a capacity limit and should not exceed it.",
+      "Users should be able to request an elevator from any floor and select a destination floor.",
+      "The elevator system should efficiently handle user requests and optimize the movement of elevators to minimize waiting time.",
+      "The system should prioritize requests based on the direction of travel and the proximity of the elevators to the requested floor.",
+      "The elevators should be able to handle multiple requests concurrently and process them in an optimal order."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/elevator-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/elevator_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/elevator_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/elevator_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/elevator_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/elevator_system"
+  },
+  {
+    "id": "food-delivery-service",
+    "slug": "food-delivery-service",
+    "title": "Online Food Delivery Service Like Swiggy",
+    "category": "On-Demand & Delivery",
+    "difficulty": "Hard",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "The food delivery service should allow customers to browse restaurants, view menus, and place orders.",
+    "requirements": [
+      "The food delivery service should allow customers to browse restaurants, view menus, and place orders.",
+      "Restaurants should be able to manage their menus, prices, and availability.",
+      "Delivery agents should be able to accept and fulfill orders.",
+      "The system should handle order tracking and status updates.",
+      "The system should support multiple payment methods.",
+      "The system should handle concurrent orders and ensure data consistency."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/food-delivery-service.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/food_delivery_service",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/food_delivery_service",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/food_delivery_service",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/food_delivery_service",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/food_delivery_service"
+  },
+  {
+    "id": "hotel-management-system",
+    "slug": "hotel-management-system",
+    "title": "Hotel Management System",
+    "category": "Reservation & Booking",
+    "difficulty": "Medium",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "The hotel management system should allow guests to book rooms, check-in, and check-out.",
+    "requirements": [
+      "The hotel management system should allow guests to book rooms, check-in, and check-out.",
+      "The system should manage different types of rooms, such as single, double, deluxe, and suite.",
+      "The system should handle room availability and reservation status.",
+      "The system should allow the hotel staff to manage guest information, room assignments, and billing.",
+      "The system should support multiple payment methods, such as cash, credit card, and online payment.",
+      "The system should handle concurrent bookings and ensure data consistency."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/hotel-management-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/hotel_management_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/hotel_management_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/hotel_management_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/hotel_management_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/hotel_management_system"
+  },
+  {
+    "id": "library-management-system",
+    "slug": "library-management-system",
+    "title": "Library Management System",
+    "category": "Management Systems",
+    "difficulty": "Medium",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "The library management system should allow librarians to manage books, members, and borrowing activities.",
+    "requirements": [
+      "The library management system should allow librarians to manage books, members, and borrowing activities.",
+      "The system should support adding, updating, and removing books from the library catalog.",
+      "Each book should have details such as title, author, ISBN, publication year, and availability status.",
+      "The system should allow members to borrow and return books.",
+      "Each member should have details such as name, member ID, contact information, and borrowing history.",
+      "The system should enforce borrowing rules, such as a maximum number of books that can be borrowed at a time and loan duration."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/library-management-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/library_management_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/library_management_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/library_management_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/library_management_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/library_management_system"
+  },
+  {
+    "id": "linkedin",
+    "slug": "linkedin",
+    "title": "Professional Networking Platform like LinkedIn",
+    "category": "Social & Media",
+    "difficulty": "Medium",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "Complete object-oriented design and domain class modeling.",
+    "requirements": [],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/linkedin.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/linkedin",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/linkedin",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/linkedin",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/linkedin",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/linkedin"
+  },
+  {
+    "id": "logging-framework",
+    "slug": "logging-framework",
+    "title": "Logging Framework",
+    "category": "Core Infrastructure",
+    "difficulty": "Medium",
+    "patterns": [
+      "Factory",
+      "Singleton"
+    ],
+    "summary": "The logging framework should support different log levels, such as DEBUG, INFO, WARNING, ERROR, and FATAL.",
+    "requirements": [
+      "The logging framework should support different log levels, such as DEBUG, INFO, WARNING, ERROR, and FATAL.",
+      "It should allow logging messages with a timestamp, log level, and message content.",
+      "The framework should support multiple output destinations, such as console, file, and database.",
+      "It should provide a configuration mechanism to set the log level and output destination.",
+      "The logging framework should be thread-safe to handle concurrent logging from multiple threads.",
+      "It should be extensible to accommodate new log levels and output destinations in the future."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/logging-framework.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/logging_framework",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/logging_framework",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/logging_framework",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/logging_framework",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/logging_framework"
+  },
+  {
+    "id": "lru-cache",
+    "slug": "lru-cache",
+    "title": "LRU Cache",
+    "category": "Core Infrastructure",
+    "difficulty": "Easy",
+    "patterns": [
+      "Factory",
+      "Strategy"
+    ],
+    "summary": "The LRU cache should support the following operations:",
+    "requirements": [
+      "The LRU cache should support the following operations:",
+      "The cache should have a fixed capacity, specified during initialization.",
+      "The cache should be thread-safe, allowing concurrent access from multiple threads.",
+      "The cache should be efficient in terms of time complexity for both put and get operations, ideally O(1)."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/lru-cache.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/lru_cache",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/lru_cache",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/lru_cache",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/lru_cache",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/lru_cache"
+  },
+  {
+    "id": "movie-ticket-booking-system",
+    "slug": "movie-ticket-booking-system",
+    "title": "Movie Ticket Booking System like BookMyShow",
+    "category": "Reservation & Booking",
+    "difficulty": "Medium",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "The system should allow users to view the list of movies playing in different theaters.",
+    "requirements": [
+      "The system should allow users to view the list of movies playing in different theaters.",
+      "Users should be able to select a movie, theater, and show timing to book tickets.",
+      "The system should display the seating arrangement of the selected show and allow users to choose seats.",
+      "Users should be able to make payments and confirm their booking.",
+      "The system should handle concurrent bookings and ensure seat availability is updated in real-time.",
+      "The system should support different types of seats (e.g., normal, premium) and pricing."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/movie-ticket-booking-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/movie_ticket_booking_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/movie_ticket_booking_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/movie_ticket_booking_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/movie_ticket_booking_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/movie_ticket_booking_system"
+  },
+  {
+    "id": "music-streaming-service",
+    "slug": "music-streaming-service",
+    "title": "Online Music Streaming Service Like Spotify",
+    "category": "Social & Media",
+    "difficulty": "Medium",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "The music streaming service should allow users to browse and search for songs, albums, and artists.",
+    "requirements": [
+      "The music streaming service should allow users to browse and search for songs, albums, and artists.",
+      "Users should be able to create and manage playlists.",
+      "The system should support user authentication and authorization.",
+      "Users should be able to play, pause, skip, and seek within songs.",
+      "The system should recommend songs and playlists based on user preferences and listening history.",
+      "The system should handle concurrent requests and ensure smooth streaming experience for multiple users."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/music-streaming-service.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/music_streaming_service",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/music_streaming_service",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/music_streaming_service",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/music_streaming_service",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/music_streaming_service"
+  },
+  {
+    "id": "online-auction-system",
+    "slug": "online-auction-system",
+    "title": "Online Auction System",
+    "category": "FinTech & Commerce",
+    "difficulty": "Medium",
+    "patterns": [
+      "Observer",
+      "State",
+      "Singleton"
+    ],
+    "summary": "The online auction system should allow users to register and log in to their accounts.",
+    "requirements": [
+      "The online auction system should allow users to register and log in to their accounts.",
+      "Users should be able to create new auction listings with details such as item name, description, starting price, and auction duration.",
+      "Users should be able to browse and search for auction listings based on various criteria (e.g., item name, category, price range).",
+      "Users should be able to place bids on active auction listings.",
+      "The system should automatically update the current highest bid and notify the bidders accordingly.",
+      "The auction should end when the specified duration is reached, and the highest bidder should be declared the winner."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/online-auction-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/online_auction_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/online_auction_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/online_auction_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/online_auction_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/online_auction_system"
+  },
+  {
+    "id": "online-shopping-service",
+    "slug": "online-shopping-service",
+    "title": "Online Shopping System Like Amazon",
+    "category": "Management Systems",
+    "difficulty": "Medium",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "The online shopping service should allow users to browse products, add them to the shopping cart, and place orders.",
+    "requirements": [
+      "The online shopping service should allow users to browse products, add them to the shopping cart, and place orders.",
+      "The system should support multiple product categories and provide search functionality.",
+      "Users should be able to manage their profiles, view order history, and track order status.",
+      "The system should handle inventory management and update product availability accordingly.",
+      "The system should support multiple payment methods and ensure secure transactions.",
+      "The system should handle concurrent user requests and ensure data consistency."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/online-shopping-service.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/online_shopping_service",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/online_shopping_service",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/online_shopping_service",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/online_shopping_service",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/online_shopping_service"
+  },
+  {
+    "id": "online-stock-brokerage-system",
+    "slug": "online-stock-brokerage-system",
+    "title": "Online Stock Brokerage System",
+    "category": "FinTech & Commerce",
+    "difficulty": "Hard",
+    "patterns": [
+      "Observer",
+      "Singleton"
+    ],
+    "summary": "The online stock brokerage system should allow users to create and manage their trading accounts.",
+    "requirements": [
+      "The online stock brokerage system should allow users to create and manage their trading accounts.",
+      "Users should be able to buy and sell stocks, as well as view their portfolio and transaction history.",
+      "The system should provide real-time stock quotes and market data to users.",
+      "The system should handle order placement, execution, and settlement processes.",
+      "The system should enforce various business rules and validations, such as checking account balances and stock availability.",
+      "The system should handle concurrent user requests and ensure data consistency and integrity."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/online-stock-brokerage-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/online_stock_brokerage_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/online_stock_brokerage_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/online_stock_brokerage_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/online_stock_brokerage_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/online_stock_brokerage_system"
+  },
+  {
+    "id": "parking-lot",
+    "slug": "parking-lot",
+    "title": "Parking Lot System",
+    "category": "Hardware & Real-World",
+    "difficulty": "Hard",
+    "patterns": [
+      "Strategy",
+      "Observer",
+      "Factory",
+      "Singleton"
+    ],
+    "summary": "The parking lot should have multiple levels, each level with a certain number of parking spots.",
+    "requirements": [
+      "The parking lot should have multiple levels, each level with a certain number of parking spots.",
+      "The parking lot should support different types of vehicles, such as cars, motorcycles, and trucks.",
+      "Each parking spot should be able to accommodate a specific type of vehicle.",
+      "The system should assign a parking spot to a vehicle upon entry and release it when the vehicle exits.",
+      "The system should track the availability of parking spots and provide real-time information to customers.",
+      "The system should handle multiple entry and exit points and support concurrent access."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/parking-lot.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/parking_lot",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/parking_lot",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/parking_lot",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/parking_lot",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/parking_lot"
+  },
+  {
+    "id": "pub-sub-system",
+    "slug": "pub-sub-system",
+    "title": "Pub-Sub System in Java",
+    "category": "Core Infrastructure",
+    "difficulty": "Medium",
+    "patterns": [
+      "Observer"
+    ],
+    "summary": "The Pub-Sub system should allow publishers to publish messages to specific topics.",
+    "requirements": [
+      "The Pub-Sub system should allow publishers to publish messages to specific topics.",
+      "Subscribers should be able to subscribe to topics of interest and receive messages published to those topics.",
+      "The system should support multiple publishers and subscribers.",
+      "Messages should be delivered to all subscribers of a topic in real-time.",
+      "The system should handle concurrent access and ensure thread safety.",
+      "The Pub-Sub system should be scalable and efficient in terms of message delivery."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/pub-sub-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/pub_sub_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/pub_sub_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/pub_sub_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/pub_sub_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/pub_sub_system"
+  },
+  {
+    "id": "restaurant-management-system",
+    "slug": "restaurant-management-system",
+    "title": "Designing Restaurant Management System",
+    "category": "Management Systems",
+    "difficulty": "Medium",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "The restaurant management system should allow customers to place orders, view the menu, and make reservations.",
+    "requirements": [
+      "The restaurant management system should allow customers to place orders, view the menu, and make reservations.",
+      "The system should manage the restaurant's inventory, including ingredients and menu items.",
+      "The system should handle order processing, including order preparation, billing, and payment.",
+      "The system should support multiple payment methods, such as cash, credit card, and mobile payments.",
+      "The system should manage staff information, including roles, schedules, and performance tracking.",
+      "The system should generate reports and analytics for management, such as sales reports and inventory analysis."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/restaurant-management-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/restaurant_management_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/restaurant_management_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/restaurant_management_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/restaurant_management_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/restaurant_management_system"
+  },
+  {
+    "id": "ride-sharing-service",
+    "slug": "ride-sharing-service",
+    "title": "Ride-Sharing Service Like Uber",
+    "category": "On-Demand & Delivery",
+    "difficulty": "Medium",
+    "patterns": [
+      "Strategy",
+      "Singleton"
+    ],
+    "summary": "The ride sharing service should allow passengers to request rides and drivers to accept and fulfill those ride requests.",
+    "requirements": [
+      "The ride sharing service should allow passengers to request rides and drivers to accept and fulfill those ride requests.",
+      "Passengers should be able to specify their pickup location, destination, and desired ride type (e.g., regular, premium).",
+      "Drivers should be able to see available ride requests and choose to accept or decline them.",
+      "The system should match ride requests with available drivers based on proximity and other factors.",
+      "The system should calculate the fare for each ride based on distance, time, and ride type.",
+      "The system should handle payments and process transactions between passengers and drivers."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/ride-sharing-service.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/ride_sharing_service",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/ride_sharing_service",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/ride_sharing_service",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/ride_sharing_service",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/ride_sharing_service"
+  },
+  {
+    "id": "snake-and-ladder",
+    "slug": "snake-and-ladder",
+    "title": "Designing Snake and Ladder Game",
+    "category": "Games & Sports",
+    "difficulty": "Easy",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "The game should be played on a board with numbered cells, typically with 100 cells.",
+    "requirements": [
+      "The game should be played on a board with numbered cells, typically with 100 cells.",
+      "The board should have a predefined set of snakes and ladders, connecting certain cells.",
+      "The game should support multiple players, each represented by a unique game piece.",
+      "Players should take turns rolling a dice to determine the number of cells to move forward.",
+      "If a player lands on a cell with the head of a snake, they should slide down to the cell with the tail of the snake.",
+      "If a player lands on a cell with the base of a ladder, they should climb up to the cell at the top of the ladder."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/snake-and-ladder.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/snake_and_ladder",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/snake_and_ladder",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/snake_and_ladder",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/snake_and_ladder",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/snake_and_ladder"
+  },
+  {
+    "id": "social-networking-service",
+    "slug": "social-networking-service",
+    "title": "Social Network Like Facebook",
+    "category": "Social & Media",
+    "difficulty": "Medium",
+    "patterns": [
+      "Singleton"
+    ],
+    "summary": "Complete object-oriented design and domain class modeling.",
+    "requirements": [],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/social-networking-service.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/social_networking_service",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/social_networking_service",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/social_networking_service",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/social_networking_service",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/social_networking_service"
+  },
+  {
+    "id": "splitwise",
+    "slug": "splitwise",
+    "title": "Designing Splitwise",
+    "category": "FinTech & Commerce",
+    "difficulty": "Medium",
+    "patterns": [
+      "Strategy",
+      "Singleton"
+    ],
+    "summary": "The system should allow users to create accounts and manage their profile information.",
+    "requirements": [
+      "The system should allow users to create accounts and manage their profile information.",
+      "Users should be able to create groups and add other users to the groups.",
+      "Users should be able to add expenses within a group, specifying the amount, description, and participants.",
+      "The system should automatically split the expenses among the participants based on their share.",
+      "Users should be able to view their individual balances with other users and settle up the balances.",
+      "The system should support different split methods, such as equal split, percentage split, and exact amounts."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/splitwise.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/splitwise",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/splitwise",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/splitwise",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/splitwise",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/splitwise"
+  },
+  {
+    "id": "stack-overflow",
+    "slug": "stack-overflow",
+    "title": "Designing Stack Overflow",
+    "category": "Social & Media",
+    "difficulty": "Medium",
+    "patterns": [
+      "Factory",
+      "Strategy"
+    ],
+    "summary": "Users can post questions, answer questions, and comment on questions and answers.",
+    "requirements": [
+      "Users can post questions, answer questions, and comment on questions and answers.",
+      "Users can vote on questions and answers.",
+      "Questions should have tags associated with them.",
+      "Users can search for questions based on keywords, tags, or user profiles.",
+      "The system should assign reputation score to users based on their activity and the quality of their contributions.",
+      "The system should handle concurrent access and ensure data consistency."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/stack-overflow.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/stack_overflow",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/stack_overflow",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/stack_overflow",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/stack_overflow",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/stack_overflow"
+  },
+  {
+    "id": "task-management-system",
+    "slug": "task-management-system",
+    "title": "Task Management System",
+    "category": "Management Systems",
+    "difficulty": "Medium",
+    "patterns": [
+      "State",
+      "Singleton",
+      "Command"
+    ],
+    "summary": "The task management system should allow users to create, update, and delete tasks.",
+    "requirements": [
+      "The task management system should allow users to create, update, and delete tasks.",
+      "Each task should have a title, description, due date, priority, and status (e.g., pending, in progress, completed).",
+      "Users should be able to assign tasks to other users and set reminders for tasks.",
+      "The system should support searching and filtering tasks based on various criteria (e.g., priority, due date, assigned user).",
+      "Users should be able to mark tasks as completed and view their task history.",
+      "The system should handle concurrent access to tasks and ensure data consistency."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/task-management-system.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/task_management_system",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/task_management_system",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/task_management_system",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/task_management_system",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/task_management_system"
+  },
+  {
+    "id": "tic-tac-toe",
+    "slug": "tic-tac-toe",
+    "title": "Tic Tac Toe Game",
+    "category": "Games & Sports",
+    "difficulty": "Easy",
+    "patterns": [
+      "Factory",
+      "Strategy"
+    ],
+    "summary": "The Tic-Tac-Toe game should be played on a 3x3 grid.",
+    "requirements": [
+      "The Tic-Tac-Toe game should be played on a 3x3 grid.",
+      "Two players take turns marking their symbols (X or O) on the grid.",
+      "The first player to get three of their symbols in a row (horizontally, vertically, or diagonally) wins the game.",
+      "If all the cells on the grid are filled and no player has won, the game ends in a draw.",
+      "The game should have a user interface to display the grid and allow players to make their moves.",
+      "The game should handle player turns and validate moves to ensure they are legal."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/tic-tac-toe.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/tic_tac_toe",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/tic_tac_toe",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/tic_tac_toe",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/tic_tac_toe",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/tic_tac_toe"
+  },
+  {
+    "id": "traffic-signal",
+    "slug": "traffic-signal",
+    "title": "Traffic Signal Control System",
+    "category": "Hardware & Real-World",
+    "difficulty": "Easy",
+    "patterns": [
+      "Observer",
+      "State",
+      "Singleton"
+    ],
+    "summary": "The traffic signal system should control the flow of traffic at an intersection with multiple roads.",
+    "requirements": [
+      "The traffic signal system should control the flow of traffic at an intersection with multiple roads.",
+      "The system should support different types of signals, such as red, yellow, and green.",
+      "The duration of each signal should be configurable and adjustable based on traffic conditions.",
+      "The system should handle the transition between signals smoothly, ensuring safe and efficient traffic flow.",
+      "The system should be able to detect and handle emergency situations, such as an ambulance or fire truck approaching the intersection.",
+      "The system should be scalable and extensible to support additional features and functionality."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/traffic-signal.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/traffic_signal",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/traffic_signal",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/traffic_signal",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/traffic_signal",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/traffic_signal"
+  },
+  {
+    "id": "vending-machine",
+    "slug": "vending-machine",
+    "title": "Vending Machine",
+    "category": "Hardware & Real-World",
+    "difficulty": "Easy",
+    "patterns": [
+      "State",
+      "Singleton"
+    ],
+    "summary": "The vending machine should support multiple products with different prices and quantities.",
+    "requirements": [
+      "The vending machine should support multiple products with different prices and quantities.",
+      "The machine should accept coins and notes of different denominations.",
+      "The machine should dispense the selected product and return change if necessary.",
+      "The machine should keep track of the available products and their quantities.",
+      "The machine should handle multiple transactions concurrently and ensure data consistency.",
+      "The machine should provide an interface for restocking products and collecting money."
+    ],
+    "githubUrl": "https://github.com/ashishps1/awesome-low-level-design/blob/main/problems/vending-machine.md",
+    "solutionsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/vending_machine",
+    "javaUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/java/src/vending_machine",
+    "cppUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/cpp/src/vending_machine",
+    "pythonUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/python/src/vending_machine",
+    "tsUrl": "https://github.com/ashishps1/awesome-low-level-design/tree/main/solutions/typescript/src/vending_machine"
+  }
+]
